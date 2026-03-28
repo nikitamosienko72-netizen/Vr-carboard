@@ -2,237 +2,587 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VR Hand Trainer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>VR Cardboard Browser</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #0a0a0f; font-family: system-ui, sans-serif; color: #e0e0ff; min-height: 100vh; }
-#app { max-width: 700px; margin: 0 auto; padding: 16px; }
-h1 { font-size: 18px; font-weight: 500; color: #c7d2fe; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
-#canvas-wrap { position: relative; width: 100%; height: 360px; background: #111; border-radius: 14px; overflow: hidden; margin-bottom: 14px; }
-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
-#hint { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: #000a; border: 1px solid #fff2; border-radius: 8px; padding: 6px 14px; font-size: 12px; color: #aac; white-space: nowrap; }
-#gesture-label { position: absolute; top: 44%; left: 50%; transform: translate(-50%,-50%); font-size: 26px; font-weight: 600; color: #fff; text-shadow: 0 0 24px #3b82f6; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
-#start-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); padding: 14px 28px; background: #3b82f611; border: 1px solid #3b82f6; color: #60a5fa; border-radius: 12px; font-size: 15px; cursor: pointer; z-index: 10; }
-#start-btn:hover { background: #3b82f622; }
-.controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.btn { flex: 1; min-width: 80px; padding: 10px 10px; border-radius: 10px; border: 1px solid #fff2; background: #fff0a; color: #e0e0ff; font-size: 12px; cursor: pointer; text-align: center; transition: all 0.18s; }
-.btn:hover { background: #fff2; }
-.btn.active { background: #3b82f622; border-color: #3b82f6; color: #93c5fd; }
-.card { background: #fff07; border: 1px solid #fff1; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
-.ex-title { font-size: 15px; font-weight: 500; color: #c7d2fe; margin-bottom: 4px; }
-.ex-desc { font-size: 12px; color: #8888aa; line-height: 1.5; margin-bottom: 10px; }
-.steps { display: flex; gap: 6px; }
-.step { flex: 1; height: 4px; border-radius: 4px; background: #fff1; transition: background 0.4s; }
-.step.done { background: #3b82f6; }
-.step.cur { background: #60a5fa; animation: blink 1s infinite; }
-@keyframes blink { 0%,100%{opacity:1}50%{opacity:.4} }
-.prog { height: 3px; background: #fff1; border-radius: 4px; margin-top: 10px; overflow: hidden; }
-.prog-fill { height: 100%; background: linear-gradient(90deg,#3b82f6,#8b5cf6); border-radius: 4px; transition: width .3s; }
-.stats { display: flex; gap: 10px; }
-.stat { flex: 1; background: #fff07; border: 1px solid #fff0f; border-radius: 10px; padding: 10px 12px; }
-.stat-val { font-size: 24px; font-weight: 500; color: #60a5fa; }
-.stat-lbl { font-size: 11px; color: #6666aa; margin-top: 2px; }
-.badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; }
-.live { background: #4ade8011; color: #4ade80; border: 1px solid #4ade8044; }
-.off { background: #ff6b6b11; color: #ff6b6b; border: 1px solid #ff6b6b44; }
-.timer-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-svg#tring { width: 52px; height: 52px; }
-#tarc { transition: stroke-dashoffset .15s; }
-#tval { font-size: 18px; font-weight: 500; color: #60a5fa; }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#000;overflow:hidden;font-family:system-ui,sans-serif;touch-action:none;}
+#vr-wrap{width:100vw;height:100vh;display:flex;position:relative;}
+
+/* Left and right eye */
+.eye{flex:1;position:relative;overflow:hidden;background:#000;}
+.eye+.eye{border-left:2px solid #333;}
+
+/* Main VR scene canvas per eye */
+.eye-canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
+
+/* Hand overlay canvas */
+.hand-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+
+/* Center divider line */
+#divider{position:absolute;left:50%;top:0;width:2px;height:100%;background:#222;z-index:100;}
+
+/* Gaze cursor - shown in both eyes via JS */
+.gaze-dot{position:absolute;width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,0.9);top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;pointer-events:none;}
+.gaze-fill{position:absolute;width:6px;height:6px;border-radius:50%;background:#fff;top:50%;left:50%;transform:translate(-50%,-50%);}
+.gaze-progress{position:absolute;top:0;left:0;width:100%;height:100%;}
+
+/* UI panels rendered on canvas */
+#ui-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:50;}
+
+/* Status bar */
+#status{position:fixed;top:0;left:0;right:0;height:28px;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:11px;color:#aaa;z-index:300;}
+#status .dot{width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block;margin-right:5px;}
+#status .dot.off{background:#ef4444;}
+
+/* Setup screen */
+#setup{position:fixed;inset:0;background:#0a0a12;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:500;padding:24px;}
+#setup h1{font-size:22px;color:#c7d2fe;font-weight:500;}
+#setup p{font-size:13px;color:#8888aa;text-align:center;max-width:320px;line-height:1.6;}
+.setup-btn{padding:13px 28px;border-radius:12px;border:1px solid #3b82f6;background:#3b82f611;color:#60a5fa;font-size:14px;cursor:pointer;width:100%;max-width:280px;text-align:center;}
+.setup-btn:hover{background:#3b82f622;}
+.setup-btn.sec{border-color:#fff2;color:#aaa;background:transparent;font-size:12px;}
+
+/* VR iframe panel */
+#vr-panel{position:fixed;inset:0;z-index:400;display:none;}
+#vr-panel iframe{width:100%;height:100%;border:none;}
+#panel-close{position:fixed;top:8px;right:8px;z-index:410;background:#000a;color:#fff;border:1px solid #fff3;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;}
 </style>
 </head>
 <body>
-<div id="app">
-  <h1>
-    <span>🖐 VR Hand Trainer</span>
-    <span class="badge off" id="cam-badge">● КАМЕРА ВИМК.</span>
-  </h1>
 
-  <div id="canvas-wrap">
-    <video id="vid" autoplay playsinline muted></video>
-    <canvas id="ov"></canvas>
-    <div id="gesture-label"></div>
-    <div id="hint">Натисніть кнопку нижче для старту</div>
-    <button id="start-btn" onclick="startCamera()">📷 Увімкнути камеру</button>
-  </div>
+<!-- Setup screen -->
+<div id="setup">
+  <h1>🥽 VR Cardboard</h1>
+  <p>Браузер, YouTube та трекінг рук у VR-режимі для Google Cardboard / VR Box</p>
+  <button class="setup-btn" onclick="startVR()">▶ Запустити VR</button>
+  <button class="setup-btn sec" onclick="startVR(true)">Без камери (демо-режим)</button>
+  <p style="font-size:11px;color:#555;margin-top:8px;">Потрібен HTTPS для гіроскопу та камери</p>
+</div>
 
-  <div class="controls">
-    <div class="btn active" id="b0" onclick="selectEx(0)">Долоня</div>
-    <div class="btn" id="b1" onclick="selectEx(1)">Кулак</div>
-    <div class="btn" id="b2" onclick="selectEx(2)">Щіпка</div>
-    <div class="btn" id="b3" onclick="selectEx(3)">Хвиля</div>
-  </div>
-
-  <div class="card">
-    <div class="timer-row">
-      <div>
-        <div class="ex-title" id="ex-title">Розкрити долоню</div>
-        <div class="ex-desc" id="ex-desc">Повільно розкрийте всі пальці якомога ширше. Тримайте позицію.</div>
-      </div>
-      <div style="text-align:center;margin-left:auto">
-        <svg id="tring" viewBox="0 0 52 52">
-          <circle cx="26" cy="26" r="22" fill="none" stroke="#fff1" stroke-width="4"/>
-          <circle id="tarc" cx="26" cy="26" r="22" fill="none" stroke="#3b82f6" stroke-width="4"
-            stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round" transform="rotate(-90 26 26)"/>
-        </svg>
-        <div id="tval">0</div>
-      </div>
+<!-- Main VR view -->
+<div id="vr-wrap" style="display:none;">
+  <div class="eye" id="eye-l">
+    <canvas class="eye-canvas" id="canvas-l"></canvas>
+    <canvas class="hand-canvas" id="hand-l"></canvas>
+    <div class="gaze-dot" id="gaze-l">
+      <div class="gaze-fill"></div>
+      <svg class="gaze-progress" viewBox="0 0 22 22">
+        <circle id="gaze-arc-l" cx="11" cy="11" r="9" fill="none" stroke="#fff" stroke-width="2"
+          stroke-dasharray="56" stroke-dashoffset="56" stroke-linecap="round" transform="rotate(-90 11 11)"/>
+      </svg>
     </div>
-    <div class="prog"><div class="prog-fill" id="pfill" style="width:0%"></div></div>
-    <div class="steps" id="steps" style="margin-top:8px"></div>
   </div>
-
-  <div class="stats">
-    <div class="stat"><div class="stat-val" id="s-rep">0</div><div class="stat-lbl">Повторень</div></div>
-    <div class="stat"><div class="stat-val" id="s-str">0</div><div class="stat-lbl">Серія</div></div>
-    <div class="stat"><div class="stat-val" id="s-sc">0</div><div class="stat-lbl">Очки</div></div>
+  <div id="divider"></div>
+  <div class="eye" id="eye-r">
+    <canvas class="eye-canvas" id="canvas-r"></canvas>
+    <canvas class="hand-canvas" id="hand-r"></canvas>
+    <div class="gaze-dot" id="gaze-r">
+      <div class="gaze-fill"></div>
+      <svg class="gaze-progress" viewBox="0 0 22 22">
+        <circle id="gaze-arc-r" cx="11" cy="11" r="9" fill="none" stroke="#fff" stroke-width="2"
+          stroke-dasharray="56" stroke-dashoffset="56" stroke-linecap="round" transform="rotate(-90 11 11)"/>
+      </svg>
+    </div>
   </div>
 </div>
 
+<div id="status" style="display:none;">
+  <span><span class="dot off" id="cam-dot"></span><span id="cam-txt">Камера вимк.</span></span>
+  <span id="gesture-txt" style="color:#60a5fa;">—</span>
+  <span><span class="dot off" id="gyro-dot"></span><span id="gyro-txt">Гіроскоп</span></span>
+</div>
+
+<!-- External panel (YouTube/web) -->
+<div id="vr-panel">
+  <button id="panel-close" onclick="closePanel()">✕ Назад до VR</button>
+  <iframe id="panel-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+</div>
+
 <script>
-const exercises = [
-  { name:'Розкрити долоню', desc:'Повільно розкрийте всі пальці якомога ширше. Тримайте позицію 2 сек.', reps:8, hold:2, key:'open' },
-  { name:'Стиснути кулак', desc:'Щільно стисніть кулак, потім розкрийте. Розвиває силу захвату.', reps:10, hold:1.5, key:'fist' },
-  { name:'Щіпка', desc:'Зведіть великий та вказівний пальці разом. Тренує дрібну моторику.', reps:12, hold:1, key:'pinch' },
-  { name:'Хвиля пальцями', desc:'Поперемінно згинайте пальці від мізинця до вказівного і назад.', reps:6, hold:2, key:'wave' }
+// ─── STATE ───────────────────────────────────────────────
+const S = {
+  gyroX: 0, gyroY: 0,        // head tilt angles
+  gazeX: 0.5, gazeY: 0.5,    // normalized gaze 0..1
+  menuIndex: 0,
+  dwellStart: null,
+  dwellItem: null,
+  dwellProgress: 0,
+  gesture: 'none',            // 'open','fist','pinch','none'
+  lastGesture: 'none',
+  fistFrames: 0,
+  handPts: [],                // skin points for skeleton
+  handBox: null,
+  camActive: false,
+  demoMode: false,
+  demoAngle: 0,
+  frame: 0,
+  currentView: 'menu',        // 'menu','browser'
+  urlInput: 'https://www.youtube.com',
+  showKeyboard: false,
+  notification: '',
+  notifTimer: 0,
+};
+
+// Menu items
+const MENU = [
+  { icon: '▶', label: 'YouTube', action: ()=>openURL('https://www.youtube.com/tv') },
+  { icon: '🌐', label: 'Браузер', action: ()=>{ S.showKeyboard=true; S.currentView='browser'; } },
+  { icon: '📰', label: 'Новини', action: ()=>openURL('https://news.google.com') },
+  { icon: '🗺', label: 'Карти', action: ()=>openURL('https://maps.google.com') },
+  { icon: '🎮', label: 'Ігри', action: ()=>openURL('https://html5games.com') },
+  { icon: '⚙', label: 'Налашт.', action: ()=>notify('Налаштування у розробці') },
 ];
 
-let cur=0, reps=0, streak=0, score=0, holdStart=null, camOn=false;
-const vid=document.getElementById('vid');
-const ov=document.getElementById('ov');
-const ctx=ov.getContext('2d');
+const KEYBOARD_ROWS = [
+  ['1','2','3','4','5','6','7','8','9','0'],
+  ['q','w','e','r','t','y','u','i','o','p'],
+  ['a','s','d','f','g','h','j','k','l',':'],
+  ['z','x','c','v','b','n','m','.','/','-'],
+  ['⌫','https://','www.','http://','GO','✕'],
+];
 
-function selectEx(i){
-  cur=i; reps=0; holdStart=null;
-  [0,1,2,3].forEach(j=>document.getElementById('b'+j).className='btn'+(j===i?' active':''));
-  const e=exercises[i];
-  document.getElementById('ex-title').textContent=e.name;
-  document.getElementById('ex-desc').textContent=e.desc;
-  renderSteps(); updateProg(0);
-  document.getElementById('tarc').style.strokeDashoffset='138';
-  document.getElementById('tval').textContent='0';
+// ─── SETUP ───────────────────────────────────────────────
+let video, ctxL, ctxR, hCtxL, hCtxR;
+
+async function startVR(demo=false) {
+  S.demoMode = demo;
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('vr-wrap').style.display = 'flex';
+  document.getElementById('status').style.display = 'flex';
+
+  const cL = document.getElementById('canvas-l');
+  const cR = document.getElementById('canvas-r');
+  const hL = document.getElementById('hand-l');
+  const hR = document.getElementById('hand-r');
+  ctxL = cL.getContext('2d');
+  ctxR = cR.getContext('2d');
+  hCtxL = hL.getContext('2d');
+  hCtxR = hR.getContext('2d');
+
+  resizeCanvases();
+  window.addEventListener('resize', resizeCanvases);
+
+  initGyro();
+  if (!demo) await initCamera();
+  else { S.demoMode = true; updateStatus(); }
+
+  requestAnimationFrame(loop);
 }
 
-function renderSteps(){
-  const e=exercises[cur];
-  document.getElementById('steps').innerHTML=
-    Array.from({length:e.reps},(_,i)=>`<div class="step${i<reps?' done':i===reps?' cur':''}"></div>`).join('');
+function resizeCanvases() {
+  const hw = window.innerWidth / 2, h = window.innerHeight;
+  ['canvas-l','canvas-r','hand-l','hand-r'].forEach((id,i) => {
+    const c = document.getElementById(id);
+    c.width = hw; c.height = h;
+  });
 }
 
-function updateProg(p){ document.getElementById('pfill').style.width=p+'%'; }
-
-function flashLabel(t){
-  const el=document.getElementById('gesture-label');
-  el.textContent=t; el.style.opacity='1';
-  setTimeout(()=>el.style.opacity='0',900);
+// ─── GYROSCOPE ───────────────────────────────────────────
+function initGyro() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(r => {
+      if (r === 'granted') listenGyro();
+    }).catch(()=>{});
+  } else {
+    listenGyro();
+  }
 }
 
-function repDone(){
-  reps++; streak++; score+=10+Math.floor(streak/3)*5;
-  document.getElementById('s-rep').textContent=reps;
-  document.getElementById('s-str').textContent=streak;
-  document.getElementById('s-sc').textContent=score;
-  const e=exercises[cur];
-  updateProg(reps/e.reps*100);
-  renderSteps();
-  flashLabel(reps>=e.reps?'🎉 Вправу виконано!':'✓ +'+( 10+Math.floor(streak/3)*5)+' очок!');
-  holdStart=null;
-  if(reps>=e.reps) setTimeout(()=>selectEx(cur<exercises.length-1?cur+1:0),1800);
+function listenGyro() {
+  window.addEventListener('deviceorientation', e => {
+    if (e.beta === null) return;
+    // beta = front/back tilt (-180..180), gamma = left/right (-90..90)
+    S.gyroY = Math.max(-1, Math.min(1, e.gamma / 45));  // left-right
+    S.gyroX = Math.max(-1, Math.min(1, (e.beta - 45) / 45)); // up-down (45° = natural hold)
+    S.gazeX = 0.5 + S.gyroY * 0.4;
+    S.gazeY = 0.5 + S.gyroX * 0.4;
+    document.getElementById('gyro-dot').className = 'dot';
+    document.getElementById('gyro-txt').textContent = 'Гіроскоп ✓';
+  });
 }
 
-function detectSkin(data,w,h){
-  const pts=[];
-  for(let y=0;y<h;y+=3)for(let x=0;x<w;x+=3){
+// ─── CAMERA + HAND ───────────────────────────────────────
+async function initCamera() {
+  try {
+    video = document.createElement('video');
+    video.autoplay = true; video.playsInline = true; video.muted = true;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: 320, height: 240 }
+    });
+    video.srcObject = stream;
+    S.camActive = true;
+    updateStatus();
+  } catch(e) {
+    S.demoMode = true;
+    updateStatus();
+  }
+}
+
+function updateStatus() {
+  const cd = document.getElementById('cam-dot');
+  const ct = document.getElementById('cam-txt');
+  if (S.camActive) { cd.className='dot'; ct.textContent='Камера ✓'; }
+  else if (S.demoMode) { cd.className='dot off'; ct.textContent='Демо-режим'; }
+  else { cd.className='dot off'; ct.textContent='Камера вимк.'; }
+}
+
+// ─── HAND SKELETON DETECTION ─────────────────────────────
+let tempCanvas, tempCtx;
+
+function processHand() {
+  if (!S.camActive || !video || video.readyState < 2) {
+    if (S.demoMode) simulateHand();
+    return;
+  }
+  if (!tempCanvas) {
+    tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 160; tempCanvas.height = 120;
+    tempCtx = tempCanvas.getContext('2d');
+  }
+  tempCtx.drawImage(video, 0, 0, 160, 120);
+  const id = tempCtx.getImageData(0, 0, 160, 120);
+  const pts = detectSkin(id.data, 160, 120);
+  S.handPts = pts;
+  S.handBox = pts.length > 80 ? bbox(pts) : null;
+
+  if (S.handBox) {
+    const b = S.handBox;
+    const ratio = b.w / Math.max(b.h, 1);
+    const area = pts.length;
+    if (ratio > 0.6 && area > 300) S.gesture = 'open';
+    else if (area < 200 || ratio < 0.45) S.gesture = 'fist';
+    else if (area > 120 && area < 280) S.gesture = 'pinch';
+    else S.gesture = 'open';
+  } else {
+    S.gesture = 'none';
+  }
+  document.getElementById('gesture-txt').textContent =
+    S.gesture==='open'?'✋ Долоня':S.gesture==='fist'?'✊ Кулак':
+    S.gesture==='pinch'?'🤏 Щіпка':'—';
+}
+
+function detectSkin(data, w, h) {
+  const pts = [];
+  for (let y=0;y<h;y+=2) for (let x=0;x<w;x+=2) {
     const i=(y*w+x)*4, r=data[i],g=data[i+1],b=data[i+2];
-    if(r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15) pts.push({x,y});
+    if (r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15)
+      pts.push({x:x/w, y:y/h});
   }
   return pts;
 }
 
-function bbox(pts){
-  if(!pts.length)return null;
-  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+function bbox(pts) {
+  let x0=1,y0=1,x1=0,y1=0;
   for(const p of pts){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
-  return{x0,y0,w:x1-x0,h:y1-y0};
+  return {x0,y0,x1,y1,w:x1-x0,h:y1-y0,cx:(x0+x1)/2,cy:(y0+y1)/2};
 }
 
-function processFrame(){
-  if(!camOn){requestAnimationFrame(processFrame);return;}
-  if(vid.readyState<2){requestAnimationFrame(processFrame);return;}
-  ov.width=vid.videoWidth||640; ov.height=vid.videoHeight||480;
-  ctx.drawImage(vid,0,0,ov.width,ov.height);
-  const id=ctx.getImageData(0,0,ov.width,ov.height);
-  const pts=detectSkin(id.data,ov.width,ov.height);
-  const box=pts.length>180?bbox(pts):null;
-  const e=exercises[cur];
-  const now=Date.now();
+// ─── DEMO HAND SIMULATION ────────────────────────────────
+function simulateHand() {
+  S.demoAngle += 0.025;
+  const cx = 0.5 + Math.sin(S.demoAngle*0.7)*0.2;
+  const cy = 0.5 + Math.cos(S.demoAngle*0.5)*0.15;
+  S.handBox = {x0:cx-0.12,y0:cy-0.15,x1:cx+0.12,y1:cy+0.1,w:0.24,h:0.25,cx,cy};
+  S.handPts = [];
+  for (let i=0;i<15;i++) S.handPts.push({
+    x: cx + (Math.random()-0.5)*0.22,
+    y: cy + (Math.random()-0.5)*0.2
+  });
+  // Cycle gestures slowly
+  const t = Math.floor(S.demoAngle/3)%3;
+  S.gesture = ['open','fist','pinch'][t];
+  document.getElementById('gesture-txt').textContent =
+    S.gesture==='open'?'✋ Долоня (демо)':S.gesture==='fist'?'✊ Кулак (демо)':'🤏 Щіпка (демо)';
+}
 
-  if(box&&box.w>55&&box.h>55){
-    const pad=22;
-    const ratio=box.w/Math.max(box.h,1);
-    const isOpen=ratio>0.55&&box.w>90;
-    const isFist=ratio<0.5||pts.length<300;
-    let match=false;
-    if(e.key==='open'&&isOpen)match=true;
-    if(e.key==='fist'&&isFist)match=true;
-    if(e.key==='pinch'&&pts.length>120&&pts.length<380)match=true;
-    if(e.key==='wave')match=Math.random()<0.25;
-
-    ctx.strokeStyle=match?'#4ade80':'#60a5fa';
-    ctx.lineWidth=2.5;
-    ctx.strokeRect(box.x0-pad,box.y0-pad,box.w+pad*2,box.h+pad*2);
-    ctx.fillStyle=match?'#4ade8018':'#60a5fa18';
-    ctx.fillRect(box.x0-pad,box.y0-pad,box.w+pad*2,box.h+pad*2);
-    ctx.fillStyle=match?'#4ade80':'#60a5fa';
-    ctx.font='13px system-ui';
-    ctx.fillText(match?'✓ Позиція знайдена':'Рука знайдена',box.x0-pad,box.y0-pad-8);
-
-    if(match){
-      if(!holdStart)holdStart=now;
-      const held=(now-holdStart)/1000;
-      const frac=Math.min(held/e.hold,1);
-      document.getElementById('tarc').style.strokeDashoffset=138*(1-frac);
-      document.getElementById('tval').textContent=Math.max(0,Math.ceil(e.hold-held));
-      if(held>=e.hold)repDone();
-      document.getElementById('hint').textContent='Тримайте позицію...';
-    } else {
-      holdStart=null;
-      document.getElementById('tarc').style.strokeDashoffset='138';
-      document.getElementById('tval').textContent='0';
-      document.getElementById('hint').textContent='Покажіть: '+e.name;
-    }
+// ─── DWELL CLICK (gaze timer) ────────────────────────────
+function updateDwell(itemKey) {
+  const now = Date.now();
+  if (S.dwellItem !== itemKey) {
+    S.dwellItem = itemKey;
+    S.dwellStart = now;
+    S.dwellProgress = 0;
   } else {
-    holdStart=null;
-    ctx.fillStyle='rgba(0,0,0,0.35)';
-    ctx.fillRect(0,0,ov.width,ov.height);
-    ctx.fillStyle='#ffffff55';
-    ctx.font='16px system-ui';
-    ctx.textAlign='center';
-    ctx.fillText('Покажіть долоню в камеру',ov.width/2,ov.height/2);
-    ctx.textAlign='left';
-    document.getElementById('hint').textContent='Наведіть руку на камеру';
+    const elapsed = now - S.dwellStart;
+    S.dwellProgress = Math.min(elapsed / 1400, 1);
+    if (S.dwellProgress >= 1) {
+      S.dwellProgress = 0;
+      S.dwellStart = null;
+      S.dwellItem = null;
+      return true; // CLICK
+    }
   }
-  requestAnimationFrame(processFrame);
+  return false;
 }
 
-async function startCamera(){
-  try {
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:640,height:480}});
-    vid.srcObject=stream;
-    document.getElementById('start-btn').style.display='none';
-    camOn=true;
-    document.getElementById('cam-badge').textContent='● LIVE';
-    document.getElementById('cam-badge').className='badge live';
-    document.getElementById('hint').textContent='Наведіть руку на камеру';
-    requestAnimationFrame(processFrame);
-  } catch(e) {
-    alert('Помилка доступу до камери: '+e.message+'\n\nПереконайтесь, що:\n• Сайт відкрито через HTTPS або localhost\n• Камера не зайнята іншим додатком\n• Ви дали дозвіл у спливаючому вікні браузера');
+function resetDwell() {
+  S.dwellItem = null;
+  S.dwellStart = null;
+  S.dwellProgress = 0;
+}
+
+// ─── NOTIFICATIONS ───────────────────────────────────────
+function notify(msg) {
+  S.notification = msg;
+  S.notifTimer = 120;
+}
+
+// ─── OPEN EXTERNAL ───────────────────────────────────────
+function openURL(url) {
+  const panel = document.getElementById('vr-panel');
+  const iframe = document.getElementById('panel-iframe');
+  iframe.src = url;
+  panel.style.display = 'block';
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(()=>{});
   }
 }
 
-selectEx(0);
-</script>
-</body>
-  </html>
+function closePanel() {
+  document.getElementById('vr-panel').style.display = 'none';
+  document.getElementById('panel-iframe').src = '';
+}
+
+// ─── MAIN RENDER LOOP ────────────────────────────────────
+function loop() {
+  S.frame++;
+  processHand();
+
+  // Gesture: fist = click trigger
+  if (S.gesture === 'fist') {
+    S.fistFrames++;
+  } else {
+    if (S.fistFrames > 4 && S.fistFrames < 25) {
+      handleFistClick();
+    }
+    S.fistFrames = 0;
+  }
+
+  if (S.notifTimer > 0) S.notifTimer--;
+
+  drawEye(ctxL, hCtxL, 'l');
+  drawEye(ctxR, hCtxR, 'r');
+  updateGazeDots();
+
+  requestAnimationFrame(loop);
+}
+
+function handleFistClick() {
+  if (S.currentView === 'menu') {
+    MENU[S.menuIndex].action();
+    notify('Вибрано: ' + MENU[S.menuIndex].label);
+  } else if (S.currentView === 'browser' && S.showKeyboard) {
+    // handled in dwell
+  }
+}
+
+// ─── DRAW EYE ────────────────────────────────────────────
+function drawEye(ctx, hCtx, side) {
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+
+  // Background gradient
+  ctx.fillStyle = '#0a0a18';
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  ctx.fillStyle = '#ffffff18';
+  for (let i=0;i<60;i++) {
+    const sx = ((i*137+side.charCodeAt(0)*17)%1000)/1000;
+    const sy = ((i*251+side.charCodeAt(0)*31)%1000)/1000;
+    const r = i%3===0?1.2:0.6;
+    ctx.beginPath();
+    ctx.arc(sx*W, sy*H, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Grid floor
+  ctx.strokeStyle = '#3b82f611';
+  ctx.lineWidth = 1;
+  for (let i=0;i<8;i++) {
+    const y = H*0.6 + i*(H*0.06);
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  for (let i=-5;i<=5;i++) {
+    const x = W/2 + i*W*0.12;
+    ctx.beginPath(); ctx.moveTo(x,H*0.6); ctx.lineTo(W/2+i*W*1.5,H*1.2); ctx.stroke();
+  }
+
+  // Horizon line
+  ctx.strokeStyle = '#3b82f633';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,H*0.6); ctx.lineTo(W,H*0.6); ctx.stroke();
+
+  // Draw current view
+  if (S.currentView === 'menu') drawMenu(ctx, W, H);
+  else if (S.currentView === 'browser') drawBrowser(ctx, W, H);
+
+  // Notification
+  if (S.notifTimer > 0) {
+    const alpha = Math.min(S.notifTimer/20, 1);
+    ctx.fillStyle = `rgba(0,0,0,${alpha*0.8})`;
+    ctx.fillRect(W/2-120, H*0.08, 240, 34);
+    ctx.fillStyle = `rgba(96,165,250,${alpha})`;
+    ctx.font = '13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(S.notification, W/2, H*0.08+22);
+    ctx.textAlign = 'left';
+  }
+
+  // Vignette
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.8);
+  vg.addColorStop(0,'transparent');
+  vg.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0,0,W,H);
+
+  // Hand skeleton overlay
+  drawHandSkeleton(hCtx, W, H);
+}
+
+// ─── MENU ────────────────────────────────────────────────
+function drawMenu(ctx, W, H) {
+  const cx = W/2, cy = H/2 - 20;
+  const cols = 3, rows = 2;
+  const itemW = 100, itemH = 78, gap = 14;
+  const totalW = cols*itemW + (cols-1)*gap;
+  const totalH = rows*itemH + (rows-1)*gap;
+  const startX = cx - totalW/2;
+  const startY = cy - totalH/2;
+
+  // Panel bg
+  ctx.fillStyle = 'rgba(10,10,30,0.85)';
+  roundRect(ctx, startX-16, startY-44, totalW+32, totalH+80, 16);
+  ctx.fill();
+  ctx.strokeStyle = '#3b82f644';
+  ctx.lineWidth = 1;
+  roundRect(ctx, startX-16, startY-44, totalW+32, totalH+80, 16);
+  ctx.stroke();
+
+  ctx.fillStyle = '#c7d2fe';
+  ctx.font = '500 14px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('VR Меню', cx, startY-20);
+  ctx.textAlign = 'left';
+
+  const gx = S.gazeX * W, gy = S.gazeY * H;
+
+  MENU.forEach((item, idx) => {
+    const col = idx % cols, row = Math.floor(idx/cols);
+    const x = startX + col*(itemW+gap);
+    const y = startY + row*(itemH+gap);
+
+    // Check gaze hit
+    const hovered = gx>=x && gx<=x+itemW && gy>=y && gy<=y+itemH;
+
+    if (hovered) {
+      S.menuIndex = idx;
+      const clicked = updateDwell('menu-'+idx);
+      if (clicked) { MENU[idx].action(); notify('✓ '+MENU[idx].label); }
+    }
+
+    const isActive = S.menuIndex === idx;
+    const isHovered = hovered;
+
+    // Item bg
+    ctx.fillStyle = isHovered ? 'rgba(59,130,246,0.25)' : isActive ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)';
+    roundRect(ctx, x, y, itemW, itemH, 10);
+    ctx.fill();
+    ctx.strokeStyle = isHovered ? '#3b82f6' : '#ffffff22';
+    ctx.lineWidth = isHovered ? 1.5 : 0.5;
+    roundRect(ctx, x, y, itemW, itemH, 10);
+    ctx.stroke();
+
+    // Dwell arc
+    if (isHovered && S.dwellProgress > 0) {
+      const r = 24;
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x+itemW/2, y+itemH/2, r, -Math.PI/2, -Math.PI/2 + S.dwellProgress*Math.PI*2);
+      ctx.stroke();
+    }
+
+    // Icon & label
+    ctx.fillStyle = isHovered ? '#93c5fd' : '#e0e0ff';
+    ctx.font = '22px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(item.icon, x+itemW/2, y+itemH/2+4);
+    ctx.font = isHovered ? '500 11px system-ui' : '11px system-ui';
+    ctx.fillStyle = isHovered ? '#bfdbfe' : '#8888aa';
+    ctx.fillText(item.label, x+itemW/2, y+itemH-12);
+    ctx.textAlign = 'left';
+  });
+
+  if (!MENU.some((_,i)=>{
+    const col=i%cols,row=Math.floor(i/cols);
+    const x=startX+col*(itemW+gap),y=startY+row*(itemH+gap);
+    const gx=S.gazeX*W,gy=S.gazeY*H;
+    return gx>=x&&gx<=x+itemW&&gy>=y&&gy<=y+itemH;
+  })) resetDwell();
+
+  // Hint
+  ctx.fillStyle = '#6666aa';
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('Дивіться на кнопку — або ✊ кулак для вибору', cx, startY+totalH+26);
+  ctx.textAlign = 'left';
+}
+
+// ─── BROWSER / KEYBOARD ──────────────────────────────────
+function drawBrowser(ctx, W, H) {
+  const cx = W/2, cy = H/2;
+
+  if (S.showKeyboard) {
+    // URL bar
+    ctx.fillStyle = 'rgba(10,10,30,0.9)';
+    roundRect(ctx, cx-190, cy-180, 380, 44, 10);
+    ctx.fill();
+    ctx.strokeStyle = '#3b82f655';
+    ctx.lineWidth = 1;
+    roundRect(ctx, cx-190, cy-180, 380, 44, 10);
+    ctx.stroke();
+    ctx.fillStyle = '#60a5fa';
+    ctx.font = '13px system-ui';
+    ctx.textAlign = 'left';
+    const urlShow = S.urlInput.length > 32 ? '…'+S.urlInput.slice(-30) : S.urlInput;
+    ctx.fillText(urlShow + (S.frame%60<30?'|':''), cx-180, cy-152);
+
+    // Keyboard
+    const kStartY = cy - 128;
+    const gx = S.gazeX * W, gy = S.gazeY * H;
+    let hoveredKey = null;
+
+    KEYBOARD_ROWS.forEach((row, ri) => {
+      const keyW = ri < 4 ? 34 : 58;
+      const kgap = 4;
+      const rowW = row.length*(keyW+kgap)-kgap;
+      const kx0 = cx - rowW/2;
+      const ky0 = kStartY + ri*(38+4);
+
+      row.forEach((key, ki) => {
+        const kx = kx0 + ki*(keyW+kgap);
+        const ky = ky0;
+        const hov = gx>=kx&&gx<=kx+keyW&&gy>=ky&&gy<=ky+34;
+        if (hov) {
+          hoveredKey = {key, kx, ky, keyW};
+          const clicked = updateDwell('key-'+ri+'-'+ki);
+          if (clicked) handleKeyPress(key);
+        }
+        ctx.fillStyle = hov ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.08)';
+        roundRect(ctx, kx, ky, keyW, 34, 6);
+        ctx.fill();
+        ctx.strokeStyle = hov ? '#3b82f6' : '#ffffff11';
+        ctx.lineWidth = hov ? 1.5 : 0.5;
+        roundRect(ctx, kx, ky, keyW, 34, 6);
+        ctx.stroke();
+        ctx.fillStyle = hov ? '#93c5fd' : '#e0e0ff';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(key, kx+keyW/2, ky+22);
+        ctx.textAlign = 'left';
+
+        // Dwell progress arc on key
+        if (hov && S.dwellProgress > 0) {
+          ctx.strokeSty
