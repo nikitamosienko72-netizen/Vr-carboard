@@ -3,228 +3,542 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>VR Browser</title>
+<title>VR Cardboard</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#06060f;color:#fff;font-family:system-ui,sans-serif;overflow:hidden;touch-action:none;user-select:none;}
-#setup{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:32px;background:#06060f;z-index:999;}
-#setup h1{font-size:26px;font-weight:500;color:#c7d2fe;}
+body{background:#000;overflow:hidden;font-family:system-ui,sans-serif;touch-action:none;user-select:none;}
+
+/* SETUP */
+#setup{position:fixed;inset:0;background:#06060f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;z-index:999;}
+#setup h1{font-size:24px;font-weight:500;color:#c7d2fe;}
 #setup p{font-size:13px;color:#6666aa;text-align:center;max-width:300px;line-height:1.7;}
-.sbtn{display:block;width:100%;max-width:280px;padding:15px;text-align:center;border-radius:14px;font-size:15px;cursor:pointer;border:none;-webkit-appearance:none;font-family:system-ui,sans-serif;}
-.sbtn.primary{background:#3b82f6;color:#fff;}
-.sbtn.secondary{background:#ffffff0f;color:#8888cc;margin-top:4px;font-size:13px;}
-#app{position:fixed;inset:0;display:none;}
-canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
-#hcv{z-index:5;pointer-events:none;}
-#cursor{position:absolute;width:30px;height:30px;margin-left:-15px;margin-top:-15px;z-index:10;pointer-events:none;}
-#cursor svg{width:100%;height:100%;}
-#notif{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:#000000cc;border:1px solid #3b82f660;border-radius:10px;padding:8px 20px;font-size:13px;color:#60a5fa;z-index:20;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
+.sbtn{display:block;width:100%;max-width:280px;padding:14px;text-align:center;border-radius:12px;font-size:14px;cursor:pointer;border:none;font-family:system-ui;}
+.sbtn.primary{background:#3b82f6;color:#fff;font-size:15px;}
+.sbtn.sec{background:#ffffff0f;color:#8888cc;}
+
+/* VR CONTAINER */
+#vr{position:fixed;inset:0;display:none;}
+
+/* Camera background - fills full screen, split handled by clip */
+#cam-bg{position:absolute;inset:0;z-index:0;}
+#cam-video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;}
+/* Mirror left eye, normal right eye */
+#cam-l{position:absolute;top:0;left:0;width:50%;height:100%;overflow:hidden;}
+#cam-l video{width:200%;height:100%;object-fit:cover;transform:translateX(0);}
+#cam-r{position:absolute;top:0;left:50%;width:50%;height:100%;overflow:hidden;}
+#cam-r video{width:200%;height:100%;object-fit:cover;transform:translateX(-50%);}
+
+/* Stereo overlay canvases */
+#cv-l{position:absolute;top:0;left:0;width:50%;height:100%;z-index:5;pointer-events:none;}
+#cv-r{position:absolute;top:0;left:50%;width:50%;height:100%;z-index:5;pointer-events:none;}
+
+/* Hand canvas - full width on top */
+#cv-hand{position:absolute;inset:0;z-index:10;pointer-events:none;}
+
+/* Center divider */
+#divider{position:absolute;top:0;left:50%;width:2px;height:100%;background:#111;z-index:20;pointer-events:none;}
+
+/* Cursors */
+.cursor{position:absolute;width:32px;height:32px;margin-left:-16px;margin-top:-16px;z-index:15;pointer-events:none;}
+#cur-l{left:25%;top:50%;}
+#cur-r{left:75%;top:50%;}
+.cursor svg{width:100%;height:100%;}
+
+/* Notification */
+#notif{position:absolute;top:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);border:1px solid #3b82f655;border-radius:10px;padding:7px 18px;font-size:13px;color:#60a5fa;z-index:30;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
+
+/* Floating windows */
+#windows{position:absolute;inset:0;z-index:8;pointer-events:none;}
+.win{position:absolute;background:rgba(8,8,24,.92);border:1px solid #3b82f655;border-radius:14px;overflow:hidden;pointer-events:none;}
+.win-title{background:rgba(59,130,246,.18);padding:8px 12px;font-size:12px;color:#93c5fd;border-bottom:1px solid #3b82f633;}
+.win iframe{width:100%;border:none;background:#000;}
 </style>
 </head>
 <body>
 
+<!-- SETUP -->
 <div id="setup">
-  <div style="font-size:52px;">🥽</div>
-  <h1>VR Browser</h1>
-  <p>Проведіть пальцем — рух курсору<br>Відпустіть — клік<br>Затримайте — авто-клік</p>
-  <button class="sbtn primary" onclick="startApp(false)">📷 Запустити з камерою</button>
-  <button class="sbtn secondary" onclick="startApp(true)">▶ Демо-режим (без камери)</button>
+  <div style="font-size:50px;">🥽</div>
+  <h1>VR Cardboard</h1>
+  <p>Задня камера як фон (AR)<br>Стерео-режим для окулярів<br>Вікна замість переходів по посиланнях</p>
+  <button class="sbtn primary" onclick="startVR()">🚀 Запустити VR</button>
+  <button class="sbtn sec" onclick="startVR(true)">▶ Демо (без камери)</button>
 </div>
 
-<div id="app">
-  <canvas id="mcv"></canvas>
-  <canvas id="hcv"></canvas>
-  <div id="cursor">
-    <svg viewBox="0 0 30 30">
-      <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2"/>
-      <circle cx="15" cy="15" r="4" fill="white"/>
-      <circle id="dwell-ring" cx="15" cy="15" r="12" fill="none" stroke="#60a5fa" stroke-width="2.5"
-        stroke-dasharray="75" stroke-dashoffset="75" stroke-linecap="round" transform="rotate(-90 15 15)"/>
+<!-- VR -->
+<div id="vr">
+  <!-- Camera passthrough - two eyes -->
+  <div id="cam-l"><video id="vid-l" autoplay playsinline muted></video></div>
+  <div id="cam-r"><video id="vid-r" autoplay playsinline muted></video></div>
+
+  <!-- Stereo UI canvases -->
+  <canvas id="cv-l"></canvas>
+  <canvas id="cv-r"></canvas>
+
+  <!-- Hand tracking canvas -->
+  <canvas id="cv-hand"></canvas>
+
+  <!-- Floating windows layer -->
+  <div id="windows"></div>
+
+  <!-- Divider -->
+  <div id="divider"></div>
+
+  <!-- Cursors -->
+  <div class="cursor" id="cur-l">
+    <svg viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="1.5"/>
+      <circle cx="16" cy="16" r="4" fill="white"/>
+      <circle class="dwell-arc" cx="16" cy="16" r="13" fill="none" stroke="#60a5fa" stroke-width="2.5"
+        stroke-dasharray="82" stroke-dashoffset="82" stroke-linecap="round" transform="rotate(-90 16 16)"/>
     </svg>
   </div>
+  <div class="cursor" id="cur-r">
+    <svg viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="1.5"/>
+      <circle cx="16" cy="16" r="4" fill="white"/>
+      <circle class="dwell-arc" cx="16" cy="16" r="13" fill="none" stroke="#60a5fa" stroke-width="2.5"
+        stroke-dasharray="82" stroke-dashoffset="82" stroke-linecap="round" transform="rotate(-90 16 16)"/>
+    </svg>
+  </div>
+
   <div id="notif"></div>
 </div>
 
-<video id="vid" autoplay playsinline muted style="display:none;"></video>
+<!-- Hidden cam for hand tracking -->
+<video id="vid-hand" autoplay playsinline muted style="display:none;"></video>
 
 <script>
-var W=window.innerWidth, H=window.innerHeight;
-var cx=0.5, cy=0.5;
-var view='menu';
-var urlInput='https://';
-var dwellKey=null, dwellVal=0;
-var frame=0;
-var camActive=false, demoMode=false;
-var handBox=null, handPts=[], gesture='none';
-var demoAngle=0;
-var notifTimer=0;
-var tmpCv=null, tmpCtx=null, vid=null;
-var dragActive=false, dragStartX=0, dragStartY=0, dragStartCX=0.5, dragStartCY=0.5;
-var mCtx=null, hCtx=null;
+// ── Globals ──
+var W = window.innerWidth, H = window.innerHeight;
+var EW = W / 2; // eye width
 
-var MENU=[
-  {icon:'▶',label:'YouTube',url:'https://www.youtube.com/tv#'},
-  {icon:'🌐',label:'Браузер',url:null},
-  {icon:'📰',label:'Новини',url:'https://news.google.com'},
-  {icon:'🗺',label:'Карти',url:'https://maps.google.com'},
-  {icon:'🎮',label:'Ігри',url:'https://html5games.com'},
-  {icon:'🎵',label:'Музика',url:'https://music.youtube.com'},
+// Cursor position (normalized within ONE eye 0..1)
+var cx = 0.5, cy = 0.5;
+var dragActive = false, dsx = 0, dsy = 0, dscx = 0.5, dscy = 0.5;
+var dwellKey = null, dwellVal = 0;
+var frame = 0;
+var camActive = false, demoMode = false;
+var handBox = null, handPts = [], gesture = 'none', demoAngle = 0;
+var notifTimer = 0;
+var tmpCv = null, tmpCtx = null, handVid = null;
+var ctxL = null, ctxR = null, ctxH = null;
+var openWindows = []; // {id, title, url, x, y, w, h, iframe}
+var view = 'menu'; // 'menu'
+
+// Menu items with URLs to open in windows
+var MENU = [
+  {icon:'▶', label:'YouTube',    url:'https://www.youtube.com/tv#', w:0.7, h:0.7},
+  {icon:'🌐', label:'Браузер',   url:'https://google.com',           w:0.7, h:0.7},
+  {icon:'📰', label:'Новини',    url:'https://news.google.com',       w:0.65,h:0.65},
+  {icon:'🗺', label:'Карти',     url:'https://maps.google.com',       w:0.7, h:0.7},
+  {icon:'🎮', label:'Ігри',      url:'https://html5games.com',        w:0.65,h:0.7},
+  {icon:'❌', label:'Закрити',   url:null,                            w:0,   h:0},
 ];
 
-var KROWS=[
-  ['1','2','3','4','5','6','7','8','9','0'],
-  ['q','w','e','r','t','y','u','i','o','p'],
-  ['a','s','d','f','g','h','j','k','l','.'],
-  ['z','x','c','v','b','n','m','/','_','⌫'],
-  ['https://','www.','.com','GO','✕'],
-];
+// ── START ──
+function startVR(demo) {
+  demoMode = !!demo;
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('vr').style.display = 'block';
 
-function startApp(demo) {
-  demoMode=demo;
-  document.getElementById('setup').style.display='none';
-  document.getElementById('app').style.display='block';
-  var mc=document.getElementById('mcv'), hc=document.getElementById('hcv');
-  mc.width=hc.width=W; mc.height=hc.height=H;
-  mCtx=mc.getContext('2d'); hCtx=hc.getContext('2d');
-  window.addEventListener('resize',function(){W=window.innerWidth;H=window.innerHeight;mc.width=hc.width=W;mc.height=hc.height=H;});
+  resize();
+  window.addEventListener('resize', resize);
+
+  var cvL = document.getElementById('cv-l');
+  var cvR = document.getElementById('cv-r');
+  var cvH = document.getElementById('cv-hand');
+  ctxL = cvL.getContext('2d');
+  ctxR = cvR.getContext('2d');
+  ctxH = cvH.getContext('2d');
+
   initTouch();
-  if(!demo) startCamera();
+  initGyro();
+
+  if (!demo) {
+    startCameras();
+  } else {
+    showNotif('Демо-режим');
+  }
+
   requestAnimationFrame(loop);
 }
 
-function startCamera() {
-  vid=document.getElementById('vid');
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:320,height:240}})
-    .then(function(s){vid.srcObject=s;camActive=true;showNotif('📷 Камера увімкнена');})
-    .catch(function(){demoMode=true;showNotif('Камера недоступна — демо');});
+function resize() {
+  W = window.innerWidth; H = window.innerHeight; EW = W / 2;
+  var cvL = document.getElementById('cv-l');
+  var cvR = document.getElementById('cv-r');
+  var cvH = document.getElementById('cv-hand');
+  cvL.width = EW; cvL.height = H;
+  cvR.width = EW; cvR.height = H;
+  cvH.width = W;  cvH.height = H;
 }
 
+// ── CAMERAS ──
+function startCameras() {
+  // Rear camera for background AR
+  var constraints = {video:{facingMode:{exact:'environment'}, width:{ideal:1280}, height:{ideal:720}}};
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+    document.getElementById('vid-l').srcObject = stream;
+    // Clone same stream to right eye
+    navigator.mediaDevices.getUserMedia(constraints).then(function(s2){
+      document.getElementById('vid-r').srcObject = s2;
+    }).catch(function(){
+      document.getElementById('vid-r').srcObject = stream;
+    });
+    camActive = true;
+    showNotif('📷 Задня камера увімкнена — AR режим');
+  }).catch(function() {
+    // Fallback: any camera
+    navigator.mediaDevices.getUserMedia({video:true}).then(function(stream){
+      document.getElementById('vid-l').srcObject = stream;
+      document.getElementById('vid-r').srcObject = stream;
+      camActive = true;
+      showNotif('📷 Камера (фронтальна)');
+    }).catch(function(){
+      demoMode = true;
+      showNotif('Камера недоступна');
+    });
+  });
+
+  // Front camera for hand tracking
+  handVid = document.getElementById('vid-hand');
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:320, height:240}})
+    .then(function(s){ handVid.srcObject = s; })
+    .catch(function(){});
+}
+
+// ── GYRO ──
+function initGyro() {
+  var req = typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function';
+  if (req) {
+    DeviceOrientationEvent.requestPermission().then(function(r){ if(r==='granted') listenGyro(); }).catch(function(){});
+  } else listenGyro();
+}
+function listenGyro() {
+  window.addEventListener('deviceorientation', function(e) {
+    if (e.gamma === null) return;
+    var ny = 0.5 + (e.gamma / 45) * 0.45;
+    var nx = 0.5 + ((e.beta - 45) / 50) * 0.4;
+    cx = Math.max(0.02, Math.min(0.98, ny));
+    cy = Math.max(0.02, Math.min(0.98, nx));
+    updateCursors();
+  });
+}
+
+// ── TOUCH ──
 function initTouch() {
-  var el=document.getElementById('app');
-  el.addEventListener('touchstart',function(e){e.preventDefault();var t=e.touches[0];dragActive=true;dragStartX=t.clientX;dragStartY=t.clientY;dragStartCX=cx;dragStartCY=cy;},{passive:false});
-  el.addEventListener('touchmove',function(e){e.preventDefault();if(!dragActive)return;var t=e.touches[0];cx=Math.max(.01,Math.min(.99,dragStartCX+(t.clientX-dragStartX)/W*2.5));cy=Math.max(.01,Math.min(.99,dragStartCY+(t.clientY-dragStartY)/H*2.5));moveCursor();},{passive:false});
-  el.addEventListener('touchend',function(e){e.preventDefault();dragActive=false;handleClick();},{passive:false});
-  el.addEventListener('mousemove',function(e){cx=e.clientX/W;cy=e.clientY/H;moveCursor();});
-  el.addEventListener('click',handleClick);
+  var el = document.getElementById('vr');
+  el.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    var t = e.touches[0];
+    dragActive = true;
+    // Normalize within the eye (use left half as reference)
+    dsx = t.clientX; dsy = t.clientY;
+    dscx = cx; dscy = cy;
+  }, {passive:false});
+  el.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (!dragActive) return;
+    var t = e.touches[0];
+    cx = Math.max(0.02, Math.min(0.98, dscx + (t.clientX - dsx) / EW * 2));
+    cy = Math.max(0.02, Math.min(0.98, dscy + (t.clientY - dsy) / H * 2));
+    updateCursors();
+  }, {passive:false});
+  el.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    dragActive = false;
+    handleClick();
+  }, {passive:false});
+  el.addEventListener('mousemove', function(e) {
+    cx = (e.clientX % EW) / EW;
+    cy = e.clientY / H;
+    updateCursors();
+  });
+  el.addEventListener('click', handleClick);
 }
 
-function moveCursor(){var c=document.getElementById('cursor');c.style.left=Math.round(cx*W)+'px';c.style.top=Math.round(cy*H)+'px';}
+function updateCursors() {
+  var cl = document.getElementById('cur-l');
+  var cr = document.getElementById('cur-r');
+  cl.style.left = Math.round(cx * EW) + 'px';
+  cl.style.top  = Math.round(cy * H)  + 'px';
+  cr.style.left = Math.round(EW + cx * EW) + 'px';
+  cr.style.top  = Math.round(cy * H)  + 'px';
+}
 
-function handleClick(){if(view==='menu')clickMenu();else clickKb();}
-
-function getML(){var iW=Math.min(108,W*.28),iH=iW*.72,gap=Math.min(12,W*.025),cols=3,rows=2,tW=cols*iW+(cols-1)*gap,tH=rows*iH+(rows-1)*gap;return{iW,iH,gap,cols,tW,tH,sx:W/2-tW/2,sy:H/2-tH/2-H*.04};}
-function getMIP(i,ml){return{x:ml.sx+(i%ml.cols)*(ml.iW+ml.gap),y:ml.sy+Math.floor(i/ml.cols)*(ml.iH+ml.gap)};}
-function getKL(){return{kH:Math.min(38,H*.075),gap:3,startY:H*.3};}
-function getKP(ri,ki,row,kl){var kW=(W-20-(row.length-1)*kl.gap)/row.length;return{x:10+ki*(kW+kl.gap),y:kl.startY+ri*(kl.kH+kl.gap),w:kW};}
-
-function clickMenu(){var ml=getML(),gx=cx*W,gy=cy*H;for(var i=0;i<MENU.length;i++){var p=getMIP(i,ml);if(gx>=p.x&&gx<=p.x+ml.iW&&gy>=p.y&&gy<=p.y+ml.iH){doMenu(i);return;}}}
-function doMenu(i){var item=MENU[i];if(item.url){showNotif('Відкриваю: '+item.label);setTimeout(function(){window.location.href=item.url;},400);}else if(item.label==='Браузер'){view='keyboard';showNotif('Введіть URL');}}
-function clickKb(){var kl=getKL(),gx=cx*W,gy=cy*H;if(gy<H*.24){view='menu';showNotif('Меню');return;}for(var ri=0;ri<KROWS.length;ri++){var row=KROWS[ri];for(var ki=0;ki<row.length;ki++){var p=getKP(ri,ki,row,kl);if(gx>=p.x&&gx<=p.x+p.w&&gy>=p.y&&gy<=p.y+kl.kH){doKey(row[ki]);return;}}}}
-function doKey(k){if(k==='⌫')urlInput=urlInput.slice(0,-1);else if(k==='GO'){showNotif('Відкриваю...');setTimeout(function(){window.location.href=urlInput.startsWith('http')?urlInput:'https://'+urlInput;},400);}else if(k==='✕'){view='menu';showNotif('Меню');}else urlInput+=k;}
-
-function processHand(){
-  if(camActive&&vid&&vid.readyState>=2){
-    if(!tmpCv){tmpCv=document.createElement('canvas');tmpCv.width=160;tmpCv.height=120;tmpCtx=tmpCv.getContext('2d');}
-    tmpCtx.drawImage(vid,0,0,160,120);
-    var id=tmpCtx.getImageData(0,0,160,120);
-    handPts=detectSkin(id.data,160,120);
-    handBox=handPts.length>80?bbox(handPts):null;
-    if(handBox){var r=handBox.w/Math.max(handBox.h,1);gesture=r>.55&&handPts.length>280?'open':handPts.length<180?'fist':'pinch';}else gesture='none';
-  } else if(demoMode){
-    demoAngle+=.022;
-    var dcx=.5+Math.sin(demoAngle*.7)*.18,dcy=.5+Math.cos(demoAngle*.5)*.13;
-    handBox={x0:dcx-.1,y0:dcy-.14,x1:dcx+.1,y1:dcy+.1,w:.2,h:.24,cx:dcx,cy:dcy};
-    handPts=[];for(var i=0;i<18;i++)handPts.push({x:dcx+(Math.random()-.5)*.2,y:dcy+(Math.random()-.5)*.18});
-    gesture=['open','fist','pinch'][Math.floor(demoAngle/3)%3];
+// ── CLICK / DWELL ──
+function handleClick() {
+  // Check menu items
+  var ml = getML();
+  var gx = cx * EW, gy = cy * H;
+  for (var i = 0; i < MENU.length; i++) {
+    var p = getMIP(i, ml);
+    if (gx >= p.x && gx <= p.x + ml.iW && gy >= p.y && gy <= p.y + ml.iH) {
+      doMenuItem(i);
+      return;
+    }
   }
-}
-function detectSkin(d,w,h){var pts=[];for(var y=0;y<h;y+=2)for(var x=0;x<w;x+=2){var i=(y*w+x)*4,r=d[i],g=d[i+1],b=d[i+2];if(r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15)pts.push({x:x/w,y:y/h});}return pts;}
-function bbox(pts){var x0=1,y0=1,x1=0,y1=0;for(var i=0;i<pts.length;i++){var p=pts[i];x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}return{x0,y0,x1,y1,w:x1-x0,h:y1-y0,cx:(x0+x1)/2,cy:(y0+y1)/2};}
-
-function checkDwell(key,hit){if(hit){if(dwellKey!==key){dwellKey=key;dwellVal=0;}else dwellVal=Math.min(dwellVal+1/85,1);if(dwellVal>=1){dwellVal=0;dwellKey=null;return true;}}else if(dwellKey===key){dwellKey=null;dwellVal=0;}return false;}
-
-function loop(){frame++;processHand();drawScene();drawHand();document.getElementById('dwell-ring').style.strokeDashoffset=75*(1-dwellVal);if(notifTimer>0)notifTimer--;if(notifTimer===0)document.getElementById('notif').style.opacity=0;requestAnimationFrame(loop);}
-
-function drawScene(){
-  mCtx.fillStyle='#06060f';mCtx.fillRect(0,0,W,H);
-  mCtx.fillStyle='#ffffff12';for(var i=0;i<70;i++){mCtx.beginPath();mCtx.arc(((i*137)%1000)/1000*W,((i*251)%1000)/1000*H,i%5===0?1.2:.55,0,Math.PI*2);mCtx.fill();}
-  mCtx.strokeStyle='#3b82f60c';mCtx.lineWidth=1;
-  for(var i=0;i<8;i++){var y=H*.6+i*H*.055;mCtx.beginPath();mCtx.moveTo(0,y);mCtx.lineTo(W,y);mCtx.stroke();}
-  for(var i=-5;i<=5;i++){var x=W/2+i*W*.12;mCtx.beginPath();mCtx.moveTo(x,H*.6);mCtx.lineTo(W/2+i*W*2,H*1.3);mCtx.stroke();}
-  mCtx.strokeStyle='#3b82f625';mCtx.lineWidth=.5;mCtx.beginPath();mCtx.moveTo(0,H*.6);mCtx.lineTo(W,H*.6);mCtx.stroke();
-  if(view==='menu')drawMenu();else drawKb();
-  var vg=mCtx.createRadialGradient(W/2,H/2,H*.1,W/2,H/2,H*.75);vg.addColorStop(0,'transparent');vg.addColorStop(1,'rgba(0,0,0,.55)');mCtx.fillStyle=vg;mCtx.fillRect(0,0,W,H);
-}
-
-function drawMenu(){
-  var ml=getML();
-  mCtx.fillStyle='rgba(8,8,24,.9)';rr(ml.sx-18,ml.sy-52,ml.tW+36,ml.tH+86,16);mCtx.fill();
-  mCtx.strokeStyle='#3b82f645';mCtx.lineWidth=1;rr(ml.sx-18,ml.sy-52,ml.tW+36,ml.tH+86,16);mCtx.stroke();
-  mCtx.fillStyle='#c7d2fe';mCtx.font='500 15px system-ui';mCtx.textAlign='center';mCtx.fillText('VR Меню',W/2,ml.sy-26);mCtx.textAlign='left';
-  var gx=cx*W,gy=cy*H;
-  for(var i=0;i<MENU.length;i++){
-    var p=getMIP(i,ml),x=p.x,y=p.y,iW=ml.iW,iH=ml.iH;
-    var hov=gx>=x&&gx<=x+iW&&gy>=y&&gy<=y+iH;
-    if(checkDwell('m'+i,hov))doMenu(i);
-    var dp=dwellKey==='m'+i?dwellVal:0;
-    mCtx.fillStyle=hov?'rgba(59,130,246,.28)':'rgba(255,255,255,.06)';rr(x,y,iW,iH,10);mCtx.fill();
-    mCtx.strokeStyle=hov?'#3b82f6':'#ffffff18';mCtx.lineWidth=hov?1.5:.5;rr(x,y,iW,iH,10);mCtx.stroke();
-    if(dp>0){mCtx.strokeStyle='#60a5fa';mCtx.lineWidth=2.5;mCtx.beginPath();mCtx.arc(x+iW/2,y+iH/2,Math.min(iW,iH)*.36,-Math.PI/2,-Math.PI/2+dp*Math.PI*2);mCtx.stroke();}
-    mCtx.font='22px system-ui';mCtx.textAlign='center';mCtx.fillStyle=hov?'#93c5fd':'#dde';mCtx.fillText(MENU[i].icon,x+iW/2,y+iH/2+6);
-    mCtx.font=(hov?'500 ':'')+'11px system-ui';mCtx.fillStyle=hov?'#bfdbfe':'#8888aa';mCtx.fillText(MENU[i].label,x+iW/2,y+iH-10);mCtx.textAlign='left';
-  }
-  mCtx.fillStyle='#333';mCtx.font='10px system-ui';mCtx.textAlign='center';
-  mCtx.fillText('Проведіть пальцем = рух  |  Відпустіть = клік  |  Затримайте = авто-клік',W/2,ml.sy+ml.tH+26);mCtx.textAlign='left';
-}
-
-function drawKb(){
-  var kl=getKL();
-  mCtx.fillStyle='rgba(0,0,0,.7)';rr(10,H*.12,W-20,H*.1,10);mCtx.fill();
-  mCtx.strokeStyle='#3b82f660';mCtx.lineWidth=1;rr(10,H*.12,W-20,H*.1,10);mCtx.stroke();
-  mCtx.fillStyle='#60a5fa';mCtx.font='13px system-ui';
-  var show=urlInput.length>36?'…'+urlInput.slice(-34):urlInput;
-  mCtx.fillText(show+(frame%60<30?'|':''),20,H*.12+H*.065);
-  mCtx.fillStyle='#444';mCtx.font='10px system-ui';mCtx.textAlign='center';
-  mCtx.fillText('↑ Торкніться тут щоб повернутись до меню',W/2,H*.26);mCtx.textAlign='left';
-  var gx=cx*W,gy=cy*H;
-  for(var ri=0;ri<KROWS.length;ri++){
-    var row=KROWS[ri];
-    for(var ki=0;ki<row.length;ki++){
-      var p=getKP(ri,ki,row,kl),hov=gx>=p.x&&gx<=p.x+p.w&&gy>=p.y&&gy<=p.y+kl.kH,key=row[ki];
-      if(checkDwell('k'+ri+ki,hov))doKey(key);
-      var dp=dwellKey==='k'+ri+ki?dwellVal:0;
-      mCtx.fillStyle=hov?'rgba(59,130,246,.3)':'rgba(255,255,255,.07)';rr(p.x,p.y,p.w,kl.kH,6);mCtx.fill();
-      mCtx.strokeStyle=hov?'#3b82f6':'#ffffff14';mCtx.lineWidth=hov?1.5:.5;rr(p.x,p.y,p.w,kl.kH,6);mCtx.stroke();
-      if(dp>0){mCtx.strokeStyle='#60a5fa';mCtx.lineWidth=2;mCtx.beginPath();mCtx.arc(p.x+p.w/2,p.y+kl.kH/2,kl.kH*.38,-Math.PI/2,-Math.PI/2+dp*Math.PI*2);mCtx.stroke();}
-      mCtx.fillStyle=hov?'#93c5fd':'#dde';mCtx.font=(ri===4?'11':'12')+'px system-ui';mCtx.textAlign='center';
-      mCtx.fillText(key,p.x+p.w/2,p.y+kl.kH*.68);mCtx.textAlign='left';
+  // Check window close buttons
+  for (var wi = openWindows.length - 1; wi >= 0; wi--) {
+    var win = openWindows[wi];
+    var closeBtnX = win.px + win.pw - 30, closeBtnY = win.py + 2;
+    if (gx >= closeBtnX && gx <= closeBtnX + 26 && gy >= closeBtnY && gy <= closeBtnY + 26) {
+      closeWindow(wi);
+      return;
     }
   }
 }
 
-var FCOLS=['#ef4444','#f97316','#eab308','#22c55e','#3b82f6'];
-function drawHand(){
-  hCtx.clearRect(0,0,W,H);if(!handBox)return;
-  var b=handBox,bx=b.cx*W,by=b.cy*H,bw=b.w*W*.5,bh=b.h*H*.5;
-  var wrist={x:bx,y:by+bh*.65};
-  var isOpen=gesture==='open',isFist=gesture==='fist';
-  var pb=[{x:bx-bw*.55,y:by+bh*.18},{x:bx-bw*.2,y:by},{x:bx+bw*.1,y:by-bh*.05},{x:bx+bw*.4,y:by+bh*.05},{x:bx+bw*.62,y:by+bh*.32}];
-  var t=frame*.035;
-  var tips=pb.map(function(p,i){var sp=isOpen?1:isFist?.15:.55,dy=isFist?bh*.08:-bh*(.52+Math.sin(t+i*.4)*.04);return{x:p.x+(p.x-bx)*.35*sp,y:p.y+dy*sp};});
-  pb.forEach(function(p,i){
-    var tip=tips[i],mid={x:(p.x+tip.x)/2,y:(p.y+tip.y)/2};
-    hCtx.strokeStyle=FCOLS[i];hCtx.lineWidth=2.5;hCtx.lineCap='round';hCtx.lineJoin='round';
-    hCtx.beginPath();hCtx.moveTo(wrist.x,wrist.y);hCtx.lineTo(p.x,p.y);hCtx.lineTo(mid.x,mid.y);hCtx.lineTo(tip.x,tip.y);hCtx.stroke();
-    [[wrist.x,wrist.y],[p.x,p.y],[mid.x,mid.y],[tip.x,tip.y]].forEach(function(j,ji){hCtx.fillStyle=ji===3?FCOLS[i]:'#fff';hCtx.beginPath();hCtx.arc(j[0],j[1],ji===3?4:3,0,Math.PI*2);hCtx.fill();});
-  });
-  hCtx.strokeStyle='rgba(255,255,255,.2)';hCtx.lineWidth=1;for(var i=0;i<pb.length-1;i++){hCtx.beginPath();hCtx.moveTo(pb[i].x,pb[i].y);hCtx.lineTo(pb[i+1].x,pb[i+1].y);hCtx.stroke();}
-  if(!isFist){hCtx.strokeStyle='rgba(96,165,250,.5)';hCtx.lineWidth=1.5;hCtx.setLineDash([5,5]);hCtx.beginPath();hCtx.moveTo(tips[1].x,tips[1].y);hCtx.lineTo(cx*W,cy*H);hCtx.stroke();hCtx.setLineDash([]);}
-  hCtx.fillStyle=gesture==='fist'?'#ef4444':gesture==='open'?'#4ade80':'#facc15';
-  hCtx.font='11px system-ui';hCtx.fillText(gesture==='open'?'✋':gesture==='fist'?'✊':'🤏',b.x0*W,b.y0*H-8);
+function checkDwell(key, hit) {
+  if (hit) {
+    if (dwellKey !== key) { dwellKey = key; dwellVal = 0; }
+    else dwellVal = Math.min(dwellVal + 1/90, 1);
+    if (dwellVal >= 1) { dwellVal = 0; dwellKey = null; return true; }
+  } else if (dwellKey === key) { dwellKey = null; dwellVal = 0; }
+  return false;
 }
 
-function rr(x,y,w,h,r){mCtx.beginPath();mCtx.moveTo(x+r,y);mCtx.lineTo(x+w-r,y);mCtx.quadraticCurveTo(x+w,y,x+w,y+r);mCtx.lineTo(x+w,y+h-r);mCtx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);mCtx.lineTo(x+r,y+h);mCtx.quadraticCurveTo(x,y+h,x,y+h-r);mCtx.lineTo(x,y+r);mCtx.quadraticCurveTo(x,y,x+r,y);mCtx.closePath();}
-function showNotif(msg){var el=document.getElementById('notif');el.textContent=msg;el.style.opacity='1';notifTimer=120;}
-</script>
-</body>
-</html>
+// ── MENU LAYOUT ──
+function getML() {
+  var cols = 3, iW = Math.min(90, EW * 0.26), iH = iW * 0.75;
+  var gap = Math.min(10, EW * 0.025);
+  var tW = cols * iW + (cols - 1) * gap, tH = 2 * iH + gap;
+  var sx = EW / 2 - tW / 2, sy = H / 2 - tH / 2 - H * 0.05;
+  return {cols, iW, iH, gap, tW, tH, sx, sy};
+}
+function getMIP(i, ml) {
+  return {x: ml.sx + (i % ml.cols) * (ml.iW + ml.gap), y: ml.sy + Math.floor(i / ml.cols) * (ml.iH + ml.gap)};
+}
+
+// ── OPEN WINDOW ──
+function doMenuItem(i) {
+  var item = MENU[i];
+  if (!item.url) {
+    // Close all windows
+    openWindows.forEach(function(w){ if(w.iframe && w.iframe.parentNode) w.iframe.parentNode.removeChild(w.iframe.parentNode); });
+    openWindows = [];
+    showNotif('Всі вікна закрито');
+    return;
+  }
+  // Open floating window
+  var pw = Math.round(EW * item.w), ph = Math.round(H * item.h);
+  var px = Math.round(EW / 2 - pw / 2), py = Math.round(H / 2 - ph / 2);
+
+  var winEl = document.createElement('div');
+  winEl.className = 'win';
+  winEl.style.cssText = 'left:'+px+'px;top:'+py+'px;width:'+pw+'px;height:'+(ph+36)+'px;position:absolute;';
+
+  var titleEl = document.createElement('div');
+  titleEl.className = 'win-title';
+  titleEl.innerHTML = item.icon + ' ' + item.label + ' <span style="float:right;cursor:pointer;color:#ef4444;font-size:14px;" onclick="closeWinById('+openWindows.length+')">✕</span>';
+  winEl.appendChild(titleEl);
+
+  var iframeEl = document.createElement('iframe');
+  iframeEl.src = item.url;
+  iframeEl.style.cssText = 'width:100%;height:'+ph+'px;border:none;';
+  iframeEl.setAttribute('allowfullscreen','');
+  iframeEl.setAttribute('allow','autoplay; encrypted-media');
+  winEl.appendChild(iframeEl);
+
+  document.getElementById('windows').appendChild(winEl);
+
+  var id = openWindows.length;
+  openWindows.push({id, title:item.label, px, py, pw, ph, el:winEl});
+  showNotif('✓ Відкрито: ' + item.label);
+}
+
+function closeWinById(id) {
+  if (openWindows[id] && openWindows[id].el && openWindows[id].el.parentNode) {
+    openWindows[id].el.parentNode.removeChild(openWindows[id].el);
+    openWindows[id] = null;
+  }
+}
+function closeWindow(i) { closeWinById(i); }
+
+// ── HAND TRACKING ──
+function processHand() {
+  if (handVid && handVid.readyState >= 2) {
+    if (!tmpCv) { tmpCv = document.createElement('canvas'); tmpCv.width = 160; tmpCv.height = 120; tmpCtx = tmpCv.getContext('2d'); }
+    tmpCtx.drawImage(handVid, 0, 0, 160, 120);
+    var id = tmpCtx.getImageData(0, 0, 160, 120);
+    handPts = detectSkin(id.data, 160, 120);
+    handBox = handPts.length > 80 ? bbox(handPts) : null;
+    if (handBox) {
+      var r = handBox.w / Math.max(handBox.h, 1);
+      gesture = r > 0.55 && handPts.length > 280 ? 'open' : handPts.length < 180 ? 'fist' : 'pinch';
+    } else gesture = 'none';
+  } else if (demoMode) {
+    demoAngle += 0.022;
+    var dcx = 0.5 + Math.sin(demoAngle * 0.7) * 0.18;
+    var dcy = 0.5 + Math.cos(demoAngle * 0.5) * 0.13;
+    handBox = {x0:dcx-.1, y0:dcy-.14, x1:dcx+.1, y1:dcy+.1, w:.2, h:.24, cx:dcx, cy:dcy};
+    handPts = [];
+    for (var i = 0; i < 18; i++) handPts.push({x: dcx+(Math.random()-.5)*.2, y: dcy+(Math.random()-.5)*.18});
+    gesture = ['open','fist','pinch'][Math.floor(demoAngle/3)%3];
+  }
+}
+
+function detectSkin(d, w, h) {
+  var pts = [];
+  for (var y=0; y<h; y+=2) for (var x=0; x<w; x+=2) {
+    var i=(y*w+x)*4, r=d[i], g=d[i+1], b=d[i+2];
+    if (r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15) pts.push({x:x/w,y:y/h});
+  }
+  return pts;
+}
+function bbox(pts) {
+  var x0=1,y0=1,x1=0,y1=0;
+  for (var i=0;i<pts.length;i++){var p=pts[i];x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
+  return {x0,y0,x1,y1,w:x1-x0,h:y1-y0,cx:(x0+x1)/2,cy:(y0+y1)/2};
+}
+
+// ── MAIN LOOP ──
+function loop() {
+  frame++;
+  processHand();
+  drawEye(ctxL, EW, H);
+  drawEye(ctxR, EW, H);
+  drawHandOverlay();
+  updateDwellArcs();
+  if (notifTimer > 0) notifTimer--;
+  if (notifTimer === 0) document.getElementById('notif').style.opacity = 0;
+  requestAnimationFrame(loop);
+}
+
+// ── DRAW EYE (UI overlay on top of camera) ──
+function drawEye(ctx, W2, H2) {
+  ctx.clearRect(0, 0, W2, H2);
+
+  // If no camera - draw dark AR-like background
+  if (demoMode) {
+    ctx.fillStyle = '#06060f';
+    ctx.fillRect(0, 0, W2, H2);
+    // Fake horizon
+    ctx.strokeStyle = '#3b82f610'; ctx.lineWidth = 1;
+    for (var i=0;i<6;i++){var y=H2*.6+i*H2*.06;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W2,y);ctx.stroke();}
+    for (var i=-4;i<=4;i++){ctx.beginPath();ctx.moveTo(W2/2+i*W2*.15,H2*.6);ctx.lineTo(W2/2+i*W2*2,H2*1.4);ctx.stroke();}
+    // Stars
+    ctx.fillStyle='#ffffff10';
+    for(var i=0;i<50;i++){ctx.beginPath();ctx.arc(((i*137)%1000)/1000*W2,((i*251)%1000)/1000*H2*.55,i%5===0?1:.5,0,Math.PI*2);ctx.fill();}
+  }
+
+  // Draw menu UI
+  drawMenu(ctx, W2, H2);
+
+  // Lens vignette
+  var vg = ctx.createRadialGradient(W2/2, H2/2, H2*0.1, W2/2, H2/2, H2*0.75);
+  vg.addColorStop(0, 'transparent');
+  vg.addColorStop(1, 'rgba(0,0,0,0.6)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W2, H2);
+}
+
+// ── DRAW MENU ──
+function drawMenu(ctx, W2, H2) {
+  var ml = getML();
+  var gx = cx * W2, gy = cy * H2;
+
+  // Panel background
+  ctx.fillStyle = 'rgba(6,6,18,0.82)';
+  rrC(ctx, ml.sx-16, ml.sy-48, ml.tW+32, ml.tH+82, 14);
+  ctx.fill();
+  ctx.strokeStyle = '#3b82f640'; ctx.lineWidth = 1;
+  rrC(ctx, ml.sx-16, ml.sy-48, ml.tW+32, ml.tH+82, 14);
+  ctx.stroke();
+
+  // Title
+  ctx.fillStyle = '#c7d2fe'; ctx.font = '500 13px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText('🥽 VR Меню', W2/2, ml.sy-24);
+  ctx.textAlign = 'left';
+
+  for (var i = 0; i < MENU.length; i++) {
+    var p = getMIP(i, ml);
+    var x = p.x, y = p.y, iW = ml.iW, iH = ml.iH;
+    var hov = gx >= x && gx <= x+iW && gy >= y && gy <= y+iH;
+
+    if (checkDwell('m'+i, hov)) doMenuItem(i);
+    var dp = dwellKey === 'm'+i ? dwellVal : 0;
+
+    ctx.fillStyle = hov ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.07)';
+    rrC(ctx, x, y, iW, iH, 9); ctx.fill();
+    ctx.strokeStyle = hov ? '#3b82f6' : '#ffffff18'; ctx.lineWidth = hov ? 1.5 : 0.5;
+    rrC(ctx, x, y, iW, iH, 9); ctx.stroke();
+
+    if (dp > 0) {
+      ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x+iW/2, y+iH/2, Math.min(iW,iH)*0.35, -Math.PI/2, -Math.PI/2+dp*Math.PI*2);
+      ctx.stroke();
+    }
+
+    ctx.font = '20px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = hov ? '#93c5fd' : '#dde';
+    ctx.fillText(MENU[i].icon, x+iW/2, y+iH/2+5);
+    ctx.font = (hov ? '500 ' : '') + '10px system-ui';
+    ctx.fillStyle = hov ? '#bfdbfe' : '#8888aa';
+    ctx.fillText(MENU[i].label, x+iW/2, y+iH-9);
+    ctx.textAlign = 'left';
+  }
+
+  // Hint
+  ctx.fillStyle = '#2a2a44'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+  ctx.fillText('Проведіть → рух  |  Відпустіть → клік  |  Затримайте → авто-клік', W2/2, ml.sy+ml.tH+22);
+  ctx.textAlign = 'left';
+
+  // Show open windows list
+  if (openWindows.filter(Boolean).length > 0) {
+    ctx.fillStyle = '#333'; ctx.font = '9px system-ui';
+    var active = openWindows.filter(Boolean);
+    ctx.fillStyle = '#4ade8088';
+    ctx.fillText('Відкрито вікон: ' + active.length, ml.sx, ml.sy + ml.tH + 36);
+  }
+}
+
+// ── HAND SKELETON ──
+var FCOLS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6'];
+
+function drawHandOverlay() {
+  ctxH.clearRect(0, 0, W, H);
+  if (!handBox) return;
+
+  // Draw on both eyes
+  [0, 1].forEach(function(eye) {
+    var offX = eye * EW;
+    var b = handBox;
+    var bx = offX + b.cx * EW, by = b.cy * H;
+    var bw = b.w * EW * 0.5, bh = b.h * H * 0.5;
+    var isFist = gesture === 'fist', isOpen = gesture === 'open';
+    var wrist = {x: bx, y: by + bh * 0.65};
+    var pb = [
+      {x:bx-bw*.55, y:by+bh*.18},
+      {x:bx-bw*.2,  y:by},
+      {x:bx+bw*.1,  y:by-bh*.05},
+      {x:bx+bw*.4,  y:by+bh*.05},
+      {x:bx+bw*.62, y:by+bh*.32},
+    ];
+    var t = frame * 0.035;
+    var tips = pb.map(function(p, i) {
+      var sp = isOpen ? 1 : isFist ? 0.15 : 0.55;
+      var dy = isFist ? bh*0.08 : -bh*(0.52 + Math.sin(t+i*.4)*0.04);
+      return {x: p.x+(p.x-bx)*.35*sp, y: p.y+dy*sp};
+    });
+
+    pb.forEach(function(p, i) {
+      var tip = tips[i], mid = {x:(p.x+tip.x)/2, y:(p.y+tip.y)/2};
+      ctxH.strokeStyle = FCOLS[i]; ctxH.lineWidth = 2.5;
+      ctxH.lineCap = 'round'; ctxH.lineJoin = 'round';
+      ctxH.beginPath();
+      ctxH.moveTo(wrist.x, wrist.y);
+      ctxH.lineTo(p.x, p.y);
+      ctxH.lineTo(mid.x, mid.y);
+      ctxH.lineTo(tip.x, tip.y);
+      ctxH.stroke();
+      [[wrist.x,wrist.y],[p.x,p.y],[mid.x,mid.y],[tip.x,tip.y]].forEach(function(j,ji){
+        ctxH.fillStyle = ji===3 ? FCOLS[i] : '#fff';
+        ctxH.beginPath(); ctxH.arc(j[0],j[1],ji===3?4:3,0,Math.PI*2); ctxH.fill();
+      });
+    });
+
+    // Palm connections
+    ctxH.strokeStyle = 'rgba
