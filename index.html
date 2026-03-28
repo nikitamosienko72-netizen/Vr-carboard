@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VR Hand Trainer</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0f; font-family: system-ui, sans-serif; color: #e0e0ff; min-height: 100vh; }
+#app { max-width: 700px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 18px; font-weight: 500; color: #c7d2fe; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+#canvas-wrap { position: relative; width: 100%; height: 360px; background: #111; border-radius: 14px; overflow: hidden; margin-bottom: 14px; }
+video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+#hint { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: #000a; border: 1px solid #fff2; border-radius: 8px; padding: 6px 14px; font-size: 12px; color: #aac; white-space: nowrap; }
+#gesture-label { position: absolute; top: 44%; left: 50%; transform: translate(-50%,-50%); font-size: 26px; font-weight: 600; color: #fff; text-shadow: 0 0 24px #3b82f6; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
+#start-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); padding: 14px 28px; background: #3b82f611; border: 1px solid #3b82f6; color: #60a5fa; border-radius: 12px; font-size: 15px; cursor: pointer; z-index: 10; }
+#start-btn:hover { background: #3b82f622; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.btn { flex: 1; min-width: 80px; padding: 10px 10px; border-radius: 10px; border: 1px solid #fff2; background: #fff0a; color: #e0e0ff; font-size: 12px; cursor: pointer; text-align: center; transition: all 0.18s; }
+.btn:hover { background: #fff2; }
+.btn.active { background: #3b82f622; border-color: #3b82f6; color: #93c5fd; }
+.card { background: #fff07; border: 1px solid #fff1; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.ex-title { font-size: 15px; font-weight: 500; color: #c7d2fe; margin-bottom: 4px; }
+.ex-desc { font-size: 12px; color: #8888aa; line-height: 1.5; margin-bottom: 10px; }
+.steps { display: flex; gap: 6px; }
+.step { flex: 1; height: 4px; border-radius: 4px; background: #fff1; transition: background 0.4s; }
+.step.done { background: #3b82f6; }
+.step.cur { background: #60a5fa; animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:.4} }
+.prog { height: 3px; background: #fff1; border-radius: 4px; margin-top: 10px; overflow: hidden; }
+.prog-fill { height: 100%; background: linear-gradient(90deg,#3b82f6,#8b5cf6); border-radius: 4px; transition: width .3s; }
+.stats { display: flex; gap: 10px; }
+.stat { flex: 1; background: #fff07; border: 1px solid #fff0f; border-radius: 10px; padding: 10px 12px; }
+.stat-val { font-size: 24px; font-weight: 500; color: #60a5fa; }
+.stat-lbl { font-size: 11px; color: #6666aa; margin-top: 2px; }
+.badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; }
+.live { background: #4ade8011; color: #4ade80; border: 1px solid #4ade8044; }
+.off { background: #ff6b6b11; color: #ff6b6b; border: 1px solid #ff6b6b44; }
+.timer-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+svg#tring { width: 52px; height: 52px; }
+#tarc { transition: stroke-dashoffset .15s; }
+#tval { font-size: 18px; font-weight: 500; color: #60a5fa; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>
+    <span>🖐 VR Hand Trainer</span>
+    <span class="badge off" id="cam-badge">● КАМЕРА ВИМК.</span>
+  </h1>
+
+  <div id="canvas-wrap">
+    <video id="vid" autoplay playsinline muted></video>
+    <canvas id="ov"></canvas>
+    <div id="gesture-label"></div>
+    <div id="hint">Натисніть кнопку нижче для старту</div>
+    <button id="start-btn" onclick="startCamera()">📷 Увімкнути камеру</button>
+  </div>
+
+  <div class="controls">
+    <div class="btn active" id="b0" onclick="selectEx(0)">Долоня</div>
+    <div class="btn" id="b1" onclick="selectEx(1)">Кулак</div>
+    <div class="btn" id="b2" onclick="selectEx(2)">Щіпка</div>
+    <div class="btn" id="b3" onclick="selectEx(3)">Хвиля</div>
+  </div>
+
+  <div class="card">
+    <div class="timer-row">
+      <div>
+        <div class="ex-title" id="ex-title">Розкрити долоню</div>
+        <div class="ex-desc" id="ex-desc">Повільно розкрийте всі пальці якомога ширше. Тримайте позицію.</div>
+      </div>
+      <div style="text-align:center;margin-left:auto">
+        <svg id="tring" viewBox="0 0 52 52">
+          <circle cx="26" cy="26" r="22" fill="none" stroke="#fff1" stroke-width="4"/>
+          <circle id="tarc" cx="26" cy="26" r="22" fill="none" stroke="#3b82f6" stroke-width="4"
+            stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round" transform="rotate(-90 26 26)"/>
+        </svg>
+        <div id="tval">0</div>
+      </div>
+    </div>
+    <div class="prog"><div class="prog-fill" id="pfill" style="width:0%"></div></div>
+    <div class="steps" id="steps" style="margin-top:8px"></div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="s-rep">0</div><div class="stat-lbl">Повторень</div></div>
+    <div class="stat"><div class="stat-val" id="s-str">0</div><div class="stat-lbl">Серія</div></div>
+    <div class="stat"><div class="stat-val" id="s-sc">0</div><div class="stat-lbl">Очки</div></div>
+  </div>
+</div>
+
+<script>
+const exercises = [
+  { name:'Розкрити долоню', desc:'Повільно розкрийте всі пальці якомога ширше. Тримайте позицію 2 сек.', reps:8, hold:2, key:'open' },
+  { name:'Стиснути кулак', desc:'Щільно стисніть кулак, потім розкрийте. Розвиває силу захвату.', reps:10, hold:1.5, key:'fist' },
+  { name:'Щіпка', desc:'Зведіть великий та вказівний пальці разом. Тренує дрібну моторику.', reps:12, hold:1, key:'pinch' },
+  { name:'Хвиля пальцями', desc:'Поперемінно згинайте пальці від мізинця до вказівного і назад.', reps:6, hold:2, key:'wave' }
+];
+
+let cur=0, reps=0, streak=0, score=0, holdStart=null, camOn=false;
+const vid=document.getElementById('vid');
+const ov=document.getElementById('ov');
+const ctx=ov.getContext('2d');
+
+function selectEx(i){
+  cur=i; reps=0; holdStart=null;
+  [0,1,2,3].forEach(j=>document.getElementById('b'+j).className='btn'+(j===i?' active':''));
+  const e=exercises[i];
+  document.getElementById('ex-title').textContent=e.name;
+  document.getElementById('ex-desc').textContent=e.desc;
+  renderSteps(); updateProg(0);
+  document.getElementById('tarc').style.strokeDashoffset='138';
+  document.getElementById('tval').textContent='0';
+}
+
+function renderSteps(){
+  const e=exercises[cur];
+  document.getElementById('steps').innerHTML=
+    Array.from({length:e.reps},(_,i)=>`<div class="step${i<reps?' done':i===reps?' cur':''}"></div>`).join('');
+}
+
+function updateProg(p){ document.getElementById('pfill').style.width=p+'%'; }
+
+function flashLabel(t){
+  const el=document.getElementById('gesture-label');
+  el.textContent=t; el.style.opacity='1';
+  setTimeout(()=>el.style.opacity='0',900);
+}
+
+function repDone(){
+  reps++; streak++; score+=10+Math.floor(streak/3)*5;
+  document.getElementById('s-rep').textContent=reps;
+  document.getElementById('s-str').textContent=streak;
+  document.getElementById('s-sc').textContent=score;
+  const e=exercises[cur];
+  updateProg(reps/e.reps*100);
+  renderSteps();
+  flashLabel(reps>=e.reps?'🎉 Вправу виконано!':'✓ +'+( 10+Math.floor(streak/3)*5)+' очок!');
+  holdStart=null;
+  if(reps>=e.reps) setTimeout(()=>selectEx(cur<exercises.length-1?cur+1:0),1800);
+}
+
+function detectSkin(data,w,h){
+  const pts=[];
+  for(let y=0;y<h;y+=3)for(let x=0;x<w;x+=3){
+    const i=(y*w+x)*4, r=data[i],g=data[i+1],b=data[i+2];
+    if(r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15) pts.push({x,y});
+  }
+  return pts;
+}
+
+function bbox(pts){
+  if(!pts.length)return null;
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const p of pts){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
+  return{x0,y0,w:x1-x0,h:y1-y0};
+}
+
+function processFrame(){
+  if(!camOn){requestAnimationFrame(processFrame);return;}
+  if(vid.readyState<2){requestAnimationFrame(processFrame);return;}
+  ov.width=vid.videoWidth||640; ov.height=vid.videoHeight||480;
+  ctx.drawImage(vid,0,0,ov.width,ov.height);
+  const id=ctx.getImageData(0,0,ov.width,ov.height);
+  const pts=detectSkin(id.data,ov.width,ov.height);
+  const box=pts.length>180?bbox(pts):null;
+  const e=exercises[cur];
+  const now=Date.now();
+
+  if(box&&box.w>55&&box.h>55){
+    const pad=22;
+    const ratio=box.w/Math.max(box.h,1);
+    const isOpen=ratio>0.55&&box.w>90;
+    const isFist=ratio<0.5||pts.length<300;
+    let match=false;
+    if(e.key==='open'&&isOpen)match=true;
+    if(e.key==='fist'&&isFist)match=true;
+    if(e.key==='pinch'&&pts.length>120&&pts.length<380)match=true;
+    if(e.key==='wave')match=Math.random()<0.25;
+
+    ctx.strokeStyle=match?'#4ade80':'#60a5fa';
+    ctx.lineWidth=2.5;
+    ctx.strokeRect(box.x0-pad,box.y0-pad,box.w+pad*2,box.h+pad*2);
+    ctx.fillStyle=match?'#4ade8018':'#60a5fa18';
+    ctx.fillRect(box.x0-pad,box.y0-pad,box.w+pad*2,box.h+pad*2);
+    ctx.fillStyle=match?'#4ade80':'#60a5fa';
+    ctx.font='13px system-ui';
+    ctx.fillText(match?'✓ Позиція знайдена':'Рука знайдена',box.x0-pad,box.y0-pad-8);
+
+    if(match){
+      if(!holdStart)holdStart=now;
+      const held=(now-holdStart)/1000;
+      const frac=Math.min(held/e.hold,1);
+      document.getElementById('tarc').style.strokeDashoffset=138*(1-frac);
+      document.getElementById('tval').textContent=Math.max(0,Math.ceil(e.hold-held));
+      if(held>=e.hold)repDone();
+      document.getElementById('hint').textContent='Тримайте позицію...';
+    } else {
+      holdStart=null;
+      document.getElementById('tarc').style.strokeDashoffset='138';
+      document.getElementById('tval').textContent='0';
+      document.getElementById('hint').textContent='Покажіть: '+e.name;
+    }
+  } else {
+    holdStart=null;
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.fillRect(0,0,ov.width,ov.height);
+    ctx.fillStyle='#ffffff55';
+    ctx.font='16px system-ui';
+    ctx.textAlign='center';
+    ctx.fillText('Покажіть долоню в камеру',ov.width/2,ov.height/2);
+    ctx.textAlign='left';
+    document.getElementById('hint').textContent='Наведіть руку на камеру';
+  }
+  requestAnimationFrame(processFrame);
+}
+
+async function startCamera(){
+  try {
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:640,height:480}});
+    vid.srcObject=stream;
+    document.getElementById('start-btn').style.display='none';
+    camOn=true;
+    document.getElementById('cam-badge').textContent='● LIVE';
+    document.getElementById('cam-badge').className='badge live';
+    document.getElementById('hint').textContent='Наведіть руку на камеру';
+    requestAnimationFrame(processFrame);
+  } catch(e) {
+    alert('Помилка доступу до камери: '+e.message+'\n\nПереконайтесь, що:\n• Сайт відкрито через HTTPS або localhost\n• Камера не зайнята іншим додатком\n• Ви дали дозвіл у спливаючому вікні браузера');
+  }
+}
+
+selectEx(0);
+</script>
+</body>
+  </html>
