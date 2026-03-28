@@ -3,586 +3,228 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>VR Cardboard Browser</title>
+<title>VR Browser</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#000;overflow:hidden;font-family:system-ui,sans-serif;touch-action:none;}
-#vr-wrap{width:100vw;height:100vh;display:flex;position:relative;}
-
-/* Left and right eye */
-.eye{flex:1;position:relative;overflow:hidden;background:#000;}
-.eye+.eye{border-left:2px solid #333;}
-
-/* Main VR scene canvas per eye */
-.eye-canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
-
-/* Hand overlay canvas */
-.hand-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
-
-/* Center divider line */
-#divider{position:absolute;left:50%;top:0;width:2px;height:100%;background:#222;z-index:100;}
-
-/* Gaze cursor - shown in both eyes via JS */
-.gaze-dot{position:absolute;width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,0.9);top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;pointer-events:none;}
-.gaze-fill{position:absolute;width:6px;height:6px;border-radius:50%;background:#fff;top:50%;left:50%;transform:translate(-50%,-50%);}
-.gaze-progress{position:absolute;top:0;left:0;width:100%;height:100%;}
-
-/* UI panels rendered on canvas */
-#ui-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:50;}
-
-/* Status bar */
-#status{position:fixed;top:0;left:0;right:0;height:28px;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:11px;color:#aaa;z-index:300;}
-#status .dot{width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block;margin-right:5px;}
-#status .dot.off{background:#ef4444;}
-
-/* Setup screen */
-#setup{position:fixed;inset:0;background:#0a0a12;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:500;padding:24px;}
-#setup h1{font-size:22px;color:#c7d2fe;font-weight:500;}
-#setup p{font-size:13px;color:#8888aa;text-align:center;max-width:320px;line-height:1.6;}
-.setup-btn{padding:13px 28px;border-radius:12px;border:1px solid #3b82f6;background:#3b82f611;color:#60a5fa;font-size:14px;cursor:pointer;width:100%;max-width:280px;text-align:center;}
-.setup-btn:hover{background:#3b82f622;}
-.setup-btn.sec{border-color:#fff2;color:#aaa;background:transparent;font-size:12px;}
-
-/* VR iframe panel */
-#vr-panel{position:fixed;inset:0;z-index:400;display:none;}
-#vr-panel iframe{width:100%;height:100%;border:none;}
-#panel-close{position:fixed;top:8px;right:8px;z-index:410;background:#000a;color:#fff;border:1px solid #fff3;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;}
+body{background:#06060f;color:#fff;font-family:system-ui,sans-serif;overflow:hidden;touch-action:none;user-select:none;}
+#setup{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:32px;background:#06060f;z-index:999;}
+#setup h1{font-size:26px;font-weight:500;color:#c7d2fe;}
+#setup p{font-size:13px;color:#6666aa;text-align:center;max-width:300px;line-height:1.7;}
+.sbtn{display:block;width:100%;max-width:280px;padding:15px;text-align:center;border-radius:14px;font-size:15px;cursor:pointer;border:none;-webkit-appearance:none;font-family:system-ui,sans-serif;}
+.sbtn.primary{background:#3b82f6;color:#fff;}
+.sbtn.secondary{background:#ffffff0f;color:#8888cc;margin-top:4px;font-size:13px;}
+#app{position:fixed;inset:0;display:none;}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
+#hcv{z-index:5;pointer-events:none;}
+#cursor{position:absolute;width:30px;height:30px;margin-left:-15px;margin-top:-15px;z-index:10;pointer-events:none;}
+#cursor svg{width:100%;height:100%;}
+#notif{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:#000000cc;border:1px solid #3b82f660;border-radius:10px;padding:8px 20px;font-size:13px;color:#60a5fa;z-index:20;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
 </style>
 </head>
 <body>
 
-<!-- Setup screen -->
 <div id="setup">
-  <h1>🥽 VR Cardboard</h1>
-  <p>Браузер, YouTube та трекінг рук у VR-режимі для Google Cardboard / VR Box</p>
-  <button class="setup-btn" onclick="startVR()">▶ Запустити VR</button>
-  <button class="setup-btn sec" onclick="startVR(true)">Без камери (демо-режим)</button>
-  <p style="font-size:11px;color:#555;margin-top:8px;">Потрібен HTTPS для гіроскопу та камери</p>
+  <div style="font-size:52px;">🥽</div>
+  <h1>VR Browser</h1>
+  <p>Проведіть пальцем — рух курсору<br>Відпустіть — клік<br>Затримайте — авто-клік</p>
+  <button class="sbtn primary" onclick="startApp(false)">📷 Запустити з камерою</button>
+  <button class="sbtn secondary" onclick="startApp(true)">▶ Демо-режим (без камери)</button>
 </div>
 
-<!-- Main VR view -->
-<div id="vr-wrap" style="display:none;">
-  <div class="eye" id="eye-l">
-    <canvas class="eye-canvas" id="canvas-l"></canvas>
-    <canvas class="hand-canvas" id="hand-l"></canvas>
-    <div class="gaze-dot" id="gaze-l">
-      <div class="gaze-fill"></div>
-      <svg class="gaze-progress" viewBox="0 0 22 22">
-        <circle id="gaze-arc-l" cx="11" cy="11" r="9" fill="none" stroke="#fff" stroke-width="2"
-          stroke-dasharray="56" stroke-dashoffset="56" stroke-linecap="round" transform="rotate(-90 11 11)"/>
-      </svg>
-    </div>
+<div id="app">
+  <canvas id="mcv"></canvas>
+  <canvas id="hcv"></canvas>
+  <div id="cursor">
+    <svg viewBox="0 0 30 30">
+      <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2"/>
+      <circle cx="15" cy="15" r="4" fill="white"/>
+      <circle id="dwell-ring" cx="15" cy="15" r="12" fill="none" stroke="#60a5fa" stroke-width="2.5"
+        stroke-dasharray="75" stroke-dashoffset="75" stroke-linecap="round" transform="rotate(-90 15 15)"/>
+    </svg>
   </div>
-  <div id="divider"></div>
-  <div class="eye" id="eye-r">
-    <canvas class="eye-canvas" id="canvas-r"></canvas>
-    <canvas class="hand-canvas" id="hand-r"></canvas>
-    <div class="gaze-dot" id="gaze-r">
-      <div class="gaze-fill"></div>
-      <svg class="gaze-progress" viewBox="0 0 22 22">
-        <circle id="gaze-arc-r" cx="11" cy="11" r="9" fill="none" stroke="#fff" stroke-width="2"
-          stroke-dasharray="56" stroke-dashoffset="56" stroke-linecap="round" transform="rotate(-90 11 11)"/>
-      </svg>
-    </div>
-  </div>
+  <div id="notif"></div>
 </div>
 
-<div id="status" style="display:none;">
-  <span><span class="dot off" id="cam-dot"></span><span id="cam-txt">Камера вимк.</span></span>
-  <span id="gesture-txt" style="color:#60a5fa;">—</span>
-  <span><span class="dot off" id="gyro-dot"></span><span id="gyro-txt">Гіроскоп</span></span>
-</div>
-
-<!-- External panel (YouTube/web) -->
-<div id="vr-panel">
-  <button id="panel-close" onclick="closePanel()">✕ Назад до VR</button>
-  <iframe id="panel-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
-</div>
+<video id="vid" autoplay playsinline muted style="display:none;"></video>
 
 <script>
-// ─── STATE ───────────────────────────────────────────────
-const S = {
-  gyroX: 0, gyroY: 0,        // head tilt angles
-  gazeX: 0.5, gazeY: 0.5,    // normalized gaze 0..1
-  menuIndex: 0,
-  dwellStart: null,
-  dwellItem: null,
-  dwellProgress: 0,
-  gesture: 'none',            // 'open','fist','pinch','none'
-  lastGesture: 'none',
-  fistFrames: 0,
-  handPts: [],                // skin points for skeleton
-  handBox: null,
-  camActive: false,
-  demoMode: false,
-  demoAngle: 0,
-  frame: 0,
-  currentView: 'menu',        // 'menu','browser'
-  urlInput: 'https://www.youtube.com',
-  showKeyboard: false,
-  notification: '',
-  notifTimer: 0,
-};
+var W=window.innerWidth, H=window.innerHeight;
+var cx=0.5, cy=0.5;
+var view='menu';
+var urlInput='https://';
+var dwellKey=null, dwellVal=0;
+var frame=0;
+var camActive=false, demoMode=false;
+var handBox=null, handPts=[], gesture='none';
+var demoAngle=0;
+var notifTimer=0;
+var tmpCv=null, tmpCtx=null, vid=null;
+var dragActive=false, dragStartX=0, dragStartY=0, dragStartCX=0.5, dragStartCY=0.5;
+var mCtx=null, hCtx=null;
 
-// Menu items
-const MENU = [
-  { icon: '▶', label: 'YouTube', action: ()=>openURL('https://www.youtube.com/tv') },
-  { icon: '🌐', label: 'Браузер', action: ()=>{ S.showKeyboard=true; S.currentView='browser'; } },
-  { icon: '📰', label: 'Новини', action: ()=>openURL('https://news.google.com') },
-  { icon: '🗺', label: 'Карти', action: ()=>openURL('https://maps.google.com') },
-  { icon: '🎮', label: 'Ігри', action: ()=>openURL('https://html5games.com') },
-  { icon: '⚙', label: 'Налашт.', action: ()=>notify('Налаштування у розробці') },
+var MENU=[
+  {icon:'▶',label:'YouTube',url:'https://www.youtube.com/tv#'},
+  {icon:'🌐',label:'Браузер',url:null},
+  {icon:'📰',label:'Новини',url:'https://news.google.com'},
+  {icon:'🗺',label:'Карти',url:'https://maps.google.com'},
+  {icon:'🎮',label:'Ігри',url:'https://html5games.com'},
+  {icon:'🎵',label:'Музика',url:'https://music.youtube.com'},
 ];
 
-const KEYBOARD_ROWS = [
+var KROWS=[
   ['1','2','3','4','5','6','7','8','9','0'],
   ['q','w','e','r','t','y','u','i','o','p'],
-  ['a','s','d','f','g','h','j','k','l',':'],
-  ['z','x','c','v','b','n','m','.','/','-'],
-  ['⌫','https://','www.','http://','GO','✕'],
+  ['a','s','d','f','g','h','j','k','l','.'],
+  ['z','x','c','v','b','n','m','/','_','⌫'],
+  ['https://','www.','.com','GO','✕'],
 ];
 
-// ─── SETUP ───────────────────────────────────────────────
-let video, ctxL, ctxR, hCtxL, hCtxR;
-
-async function startVR(demo=false) {
-  S.demoMode = demo;
-  document.getElementById('setup').style.display = 'none';
-  document.getElementById('vr-wrap').style.display = 'flex';
-  document.getElementById('status').style.display = 'flex';
-
-  const cL = document.getElementById('canvas-l');
-  const cR = document.getElementById('canvas-r');
-  const hL = document.getElementById('hand-l');
-  const hR = document.getElementById('hand-r');
-  ctxL = cL.getContext('2d');
-  ctxR = cR.getContext('2d');
-  hCtxL = hL.getContext('2d');
-  hCtxR = hR.getContext('2d');
-
-  resizeCanvases();
-  window.addEventListener('resize', resizeCanvases);
-
-  initGyro();
-  if (!demo) await initCamera();
-  else { S.demoMode = true; updateStatus(); }
-
+function startApp(demo) {
+  demoMode=demo;
+  document.getElementById('setup').style.display='none';
+  document.getElementById('app').style.display='block';
+  var mc=document.getElementById('mcv'), hc=document.getElementById('hcv');
+  mc.width=hc.width=W; mc.height=hc.height=H;
+  mCtx=mc.getContext('2d'); hCtx=hc.getContext('2d');
+  window.addEventListener('resize',function(){W=window.innerWidth;H=window.innerHeight;mc.width=hc.width=W;mc.height=hc.height=H;});
+  initTouch();
+  if(!demo) startCamera();
   requestAnimationFrame(loop);
 }
 
-function resizeCanvases() {
-  const hw = window.innerWidth / 2, h = window.innerHeight;
-  ['canvas-l','canvas-r','hand-l','hand-r'].forEach((id,i) => {
-    const c = document.getElementById(id);
-    c.width = hw; c.height = h;
-  });
+function startCamera() {
+  vid=document.getElementById('vid');
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:320,height:240}})
+    .then(function(s){vid.srcObject=s;camActive=true;showNotif('📷 Камера увімкнена');})
+    .catch(function(){demoMode=true;showNotif('Камера недоступна — демо');});
 }
 
-// ─── GYROSCOPE ───────────────────────────────────────────
-function initGyro() {
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(r => {
-      if (r === 'granted') listenGyro();
-    }).catch(()=>{});
-  } else {
-    listenGyro();
+function initTouch() {
+  var el=document.getElementById('app');
+  el.addEventListener('touchstart',function(e){e.preventDefault();var t=e.touches[0];dragActive=true;dragStartX=t.clientX;dragStartY=t.clientY;dragStartCX=cx;dragStartCY=cy;},{passive:false});
+  el.addEventListener('touchmove',function(e){e.preventDefault();if(!dragActive)return;var t=e.touches[0];cx=Math.max(.01,Math.min(.99,dragStartCX+(t.clientX-dragStartX)/W*2.5));cy=Math.max(.01,Math.min(.99,dragStartCY+(t.clientY-dragStartY)/H*2.5));moveCursor();},{passive:false});
+  el.addEventListener('touchend',function(e){e.preventDefault();dragActive=false;handleClick();},{passive:false});
+  el.addEventListener('mousemove',function(e){cx=e.clientX/W;cy=e.clientY/H;moveCursor();});
+  el.addEventListener('click',handleClick);
+}
+
+function moveCursor(){var c=document.getElementById('cursor');c.style.left=Math.round(cx*W)+'px';c.style.top=Math.round(cy*H)+'px';}
+
+function handleClick(){if(view==='menu')clickMenu();else clickKb();}
+
+function getML(){var iW=Math.min(108,W*.28),iH=iW*.72,gap=Math.min(12,W*.025),cols=3,rows=2,tW=cols*iW+(cols-1)*gap,tH=rows*iH+(rows-1)*gap;return{iW,iH,gap,cols,tW,tH,sx:W/2-tW/2,sy:H/2-tH/2-H*.04};}
+function getMIP(i,ml){return{x:ml.sx+(i%ml.cols)*(ml.iW+ml.gap),y:ml.sy+Math.floor(i/ml.cols)*(ml.iH+ml.gap)};}
+function getKL(){return{kH:Math.min(38,H*.075),gap:3,startY:H*.3};}
+function getKP(ri,ki,row,kl){var kW=(W-20-(row.length-1)*kl.gap)/row.length;return{x:10+ki*(kW+kl.gap),y:kl.startY+ri*(kl.kH+kl.gap),w:kW};}
+
+function clickMenu(){var ml=getML(),gx=cx*W,gy=cy*H;for(var i=0;i<MENU.length;i++){var p=getMIP(i,ml);if(gx>=p.x&&gx<=p.x+ml.iW&&gy>=p.y&&gy<=p.y+ml.iH){doMenu(i);return;}}}
+function doMenu(i){var item=MENU[i];if(item.url){showNotif('Відкриваю: '+item.label);setTimeout(function(){window.location.href=item.url;},400);}else if(item.label==='Браузер'){view='keyboard';showNotif('Введіть URL');}}
+function clickKb(){var kl=getKL(),gx=cx*W,gy=cy*H;if(gy<H*.24){view='menu';showNotif('Меню');return;}for(var ri=0;ri<KROWS.length;ri++){var row=KROWS[ri];for(var ki=0;ki<row.length;ki++){var p=getKP(ri,ki,row,kl);if(gx>=p.x&&gx<=p.x+p.w&&gy>=p.y&&gy<=p.y+kl.kH){doKey(row[ki]);return;}}}}
+function doKey(k){if(k==='⌫')urlInput=urlInput.slice(0,-1);else if(k==='GO'){showNotif('Відкриваю...');setTimeout(function(){window.location.href=urlInput.startsWith('http')?urlInput:'https://'+urlInput;},400);}else if(k==='✕'){view='menu';showNotif('Меню');}else urlInput+=k;}
+
+function processHand(){
+  if(camActive&&vid&&vid.readyState>=2){
+    if(!tmpCv){tmpCv=document.createElement('canvas');tmpCv.width=160;tmpCv.height=120;tmpCtx=tmpCv.getContext('2d');}
+    tmpCtx.drawImage(vid,0,0,160,120);
+    var id=tmpCtx.getImageData(0,0,160,120);
+    handPts=detectSkin(id.data,160,120);
+    handBox=handPts.length>80?bbox(handPts):null;
+    if(handBox){var r=handBox.w/Math.max(handBox.h,1);gesture=r>.55&&handPts.length>280?'open':handPts.length<180?'fist':'pinch';}else gesture='none';
+  } else if(demoMode){
+    demoAngle+=.022;
+    var dcx=.5+Math.sin(demoAngle*.7)*.18,dcy=.5+Math.cos(demoAngle*.5)*.13;
+    handBox={x0:dcx-.1,y0:dcy-.14,x1:dcx+.1,y1:dcy+.1,w:.2,h:.24,cx:dcx,cy:dcy};
+    handPts=[];for(var i=0;i<18;i++)handPts.push({x:dcx+(Math.random()-.5)*.2,y:dcy+(Math.random()-.5)*.18});
+    gesture=['open','fist','pinch'][Math.floor(demoAngle/3)%3];
   }
 }
+function detectSkin(d,w,h){var pts=[];for(var y=0;y<h;y+=2)for(var x=0;x<w;x+=2){var i=(y*w+x)*4,r=d[i],g=d[i+1],b=d[i+2];if(r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15)pts.push({x:x/w,y:y/h});}return pts;}
+function bbox(pts){var x0=1,y0=1,x1=0,y1=0;for(var i=0;i<pts.length;i++){var p=pts[i];x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}return{x0,y0,x1,y1,w:x1-x0,h:y1-y0,cx:(x0+x1)/2,cy:(y0+y1)/2};}
 
-function listenGyro() {
-  window.addEventListener('deviceorientation', e => {
-    if (e.beta === null) return;
-    // beta = front/back tilt (-180..180), gamma = left/right (-90..90)
-    S.gyroY = Math.max(-1, Math.min(1, e.gamma / 45));  // left-right
-    S.gyroX = Math.max(-1, Math.min(1, (e.beta - 45) / 45)); // up-down (45° = natural hold)
-    S.gazeX = 0.5 + S.gyroY * 0.4;
-    S.gazeY = 0.5 + S.gyroX * 0.4;
-    document.getElementById('gyro-dot').className = 'dot';
-    document.getElementById('gyro-txt').textContent = 'Гіроскоп ✓';
-  });
+function checkDwell(key,hit){if(hit){if(dwellKey!==key){dwellKey=key;dwellVal=0;}else dwellVal=Math.min(dwellVal+1/85,1);if(dwellVal>=1){dwellVal=0;dwellKey=null;return true;}}else if(dwellKey===key){dwellKey=null;dwellVal=0;}return false;}
+
+function loop(){frame++;processHand();drawScene();drawHand();document.getElementById('dwell-ring').style.strokeDashoffset=75*(1-dwellVal);if(notifTimer>0)notifTimer--;if(notifTimer===0)document.getElementById('notif').style.opacity=0;requestAnimationFrame(loop);}
+
+function drawScene(){
+  mCtx.fillStyle='#06060f';mCtx.fillRect(0,0,W,H);
+  mCtx.fillStyle='#ffffff12';for(var i=0;i<70;i++){mCtx.beginPath();mCtx.arc(((i*137)%1000)/1000*W,((i*251)%1000)/1000*H,i%5===0?1.2:.55,0,Math.PI*2);mCtx.fill();}
+  mCtx.strokeStyle='#3b82f60c';mCtx.lineWidth=1;
+  for(var i=0;i<8;i++){var y=H*.6+i*H*.055;mCtx.beginPath();mCtx.moveTo(0,y);mCtx.lineTo(W,y);mCtx.stroke();}
+  for(var i=-5;i<=5;i++){var x=W/2+i*W*.12;mCtx.beginPath();mCtx.moveTo(x,H*.6);mCtx.lineTo(W/2+i*W*2,H*1.3);mCtx.stroke();}
+  mCtx.strokeStyle='#3b82f625';mCtx.lineWidth=.5;mCtx.beginPath();mCtx.moveTo(0,H*.6);mCtx.lineTo(W,H*.6);mCtx.stroke();
+  if(view==='menu')drawMenu();else drawKb();
+  var vg=mCtx.createRadialGradient(W/2,H/2,H*.1,W/2,H/2,H*.75);vg.addColorStop(0,'transparent');vg.addColorStop(1,'rgba(0,0,0,.55)');mCtx.fillStyle=vg;mCtx.fillRect(0,0,W,H);
 }
 
-// ─── CAMERA + HAND ───────────────────────────────────────
-async function initCamera() {
-  try {
-    video = document.createElement('video');
-    video.autoplay = true; video.playsInline = true; video.muted = true;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: 320, height: 240 }
-    });
-    video.srcObject = stream;
-    S.camActive = true;
-    updateStatus();
-  } catch(e) {
-    S.demoMode = true;
-    updateStatus();
+function drawMenu(){
+  var ml=getML();
+  mCtx.fillStyle='rgba(8,8,24,.9)';rr(ml.sx-18,ml.sy-52,ml.tW+36,ml.tH+86,16);mCtx.fill();
+  mCtx.strokeStyle='#3b82f645';mCtx.lineWidth=1;rr(ml.sx-18,ml.sy-52,ml.tW+36,ml.tH+86,16);mCtx.stroke();
+  mCtx.fillStyle='#c7d2fe';mCtx.font='500 15px system-ui';mCtx.textAlign='center';mCtx.fillText('VR Меню',W/2,ml.sy-26);mCtx.textAlign='left';
+  var gx=cx*W,gy=cy*H;
+  for(var i=0;i<MENU.length;i++){
+    var p=getMIP(i,ml),x=p.x,y=p.y,iW=ml.iW,iH=ml.iH;
+    var hov=gx>=x&&gx<=x+iW&&gy>=y&&gy<=y+iH;
+    if(checkDwell('m'+i,hov))doMenu(i);
+    var dp=dwellKey==='m'+i?dwellVal:0;
+    mCtx.fillStyle=hov?'rgba(59,130,246,.28)':'rgba(255,255,255,.06)';rr(x,y,iW,iH,10);mCtx.fill();
+    mCtx.strokeStyle=hov?'#3b82f6':'#ffffff18';mCtx.lineWidth=hov?1.5:.5;rr(x,y,iW,iH,10);mCtx.stroke();
+    if(dp>0){mCtx.strokeStyle='#60a5fa';mCtx.lineWidth=2.5;mCtx.beginPath();mCtx.arc(x+iW/2,y+iH/2,Math.min(iW,iH)*.36,-Math.PI/2,-Math.PI/2+dp*Math.PI*2);mCtx.stroke();}
+    mCtx.font='22px system-ui';mCtx.textAlign='center';mCtx.fillStyle=hov?'#93c5fd':'#dde';mCtx.fillText(MENU[i].icon,x+iW/2,y+iH/2+6);
+    mCtx.font=(hov?'500 ':'')+'11px system-ui';mCtx.fillStyle=hov?'#bfdbfe':'#8888aa';mCtx.fillText(MENU[i].label,x+iW/2,y+iH-10);mCtx.textAlign='left';
   }
+  mCtx.fillStyle='#333';mCtx.font='10px system-ui';mCtx.textAlign='center';
+  mCtx.fillText('Проведіть пальцем = рух  |  Відпустіть = клік  |  Затримайте = авто-клік',W/2,ml.sy+ml.tH+26);mCtx.textAlign='left';
 }
 
-function updateStatus() {
-  const cd = document.getElementById('cam-dot');
-  const ct = document.getElementById('cam-txt');
-  if (S.camActive) { cd.className='dot'; ct.textContent='Камера ✓'; }
-  else if (S.demoMode) { cd.className='dot off'; ct.textContent='Демо-режим'; }
-  else { cd.className='dot off'; ct.textContent='Камера вимк.'; }
-}
-
-// ─── HAND SKELETON DETECTION ─────────────────────────────
-let tempCanvas, tempCtx;
-
-function processHand() {
-  if (!S.camActive || !video || video.readyState < 2) {
-    if (S.demoMode) simulateHand();
-    return;
-  }
-  if (!tempCanvas) {
-    tempCanvas = document.createElement('canvas');
-    tempCanvas.width = 160; tempCanvas.height = 120;
-    tempCtx = tempCanvas.getContext('2d');
-  }
-  tempCtx.drawImage(video, 0, 0, 160, 120);
-  const id = tempCtx.getImageData(0, 0, 160, 120);
-  const pts = detectSkin(id.data, 160, 120);
-  S.handPts = pts;
-  S.handBox = pts.length > 80 ? bbox(pts) : null;
-
-  if (S.handBox) {
-    const b = S.handBox;
-    const ratio = b.w / Math.max(b.h, 1);
-    const area = pts.length;
-    if (ratio > 0.6 && area > 300) S.gesture = 'open';
-    else if (area < 200 || ratio < 0.45) S.gesture = 'fist';
-    else if (area > 120 && area < 280) S.gesture = 'pinch';
-    else S.gesture = 'open';
-  } else {
-    S.gesture = 'none';
-  }
-  document.getElementById('gesture-txt').textContent =
-    S.gesture==='open'?'✋ Долоня':S.gesture==='fist'?'✊ Кулак':
-    S.gesture==='pinch'?'🤏 Щіпка':'—';
-}
-
-function detectSkin(data, w, h) {
-  const pts = [];
-  for (let y=0;y<h;y+=2) for (let x=0;x<w;x+=2) {
-    const i=(y*w+x)*4, r=data[i],g=data[i+1],b=data[i+2];
-    if (r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15)
-      pts.push({x:x/w, y:y/h});
-  }
-  return pts;
-}
-
-function bbox(pts) {
-  let x0=1,y0=1,x1=0,y1=0;
-  for(const p of pts){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
-  return {x0,y0,x1,y1,w:x1-x0,h:y1-y0,cx:(x0+x1)/2,cy:(y0+y1)/2};
-}
-
-// ─── DEMO HAND SIMULATION ────────────────────────────────
-function simulateHand() {
-  S.demoAngle += 0.025;
-  const cx = 0.5 + Math.sin(S.demoAngle*0.7)*0.2;
-  const cy = 0.5 + Math.cos(S.demoAngle*0.5)*0.15;
-  S.handBox = {x0:cx-0.12,y0:cy-0.15,x1:cx+0.12,y1:cy+0.1,w:0.24,h:0.25,cx,cy};
-  S.handPts = [];
-  for (let i=0;i<15;i++) S.handPts.push({
-    x: cx + (Math.random()-0.5)*0.22,
-    y: cy + (Math.random()-0.5)*0.2
-  });
-  // Cycle gestures slowly
-  const t = Math.floor(S.demoAngle/3)%3;
-  S.gesture = ['open','fist','pinch'][t];
-  document.getElementById('gesture-txt').textContent =
-    S.gesture==='open'?'✋ Долоня (демо)':S.gesture==='fist'?'✊ Кулак (демо)':'🤏 Щіпка (демо)';
-}
-
-// ─── DWELL CLICK (gaze timer) ────────────────────────────
-function updateDwell(itemKey) {
-  const now = Date.now();
-  if (S.dwellItem !== itemKey) {
-    S.dwellItem = itemKey;
-    S.dwellStart = now;
-    S.dwellProgress = 0;
-  } else {
-    const elapsed = now - S.dwellStart;
-    S.dwellProgress = Math.min(elapsed / 1400, 1);
-    if (S.dwellProgress >= 1) {
-      S.dwellProgress = 0;
-      S.dwellStart = null;
-      S.dwellItem = null;
-      return true; // CLICK
+function drawKb(){
+  var kl=getKL();
+  mCtx.fillStyle='rgba(0,0,0,.7)';rr(10,H*.12,W-20,H*.1,10);mCtx.fill();
+  mCtx.strokeStyle='#3b82f660';mCtx.lineWidth=1;rr(10,H*.12,W-20,H*.1,10);mCtx.stroke();
+  mCtx.fillStyle='#60a5fa';mCtx.font='13px system-ui';
+  var show=urlInput.length>36?'…'+urlInput.slice(-34):urlInput;
+  mCtx.fillText(show+(frame%60<30?'|':''),20,H*.12+H*.065);
+  mCtx.fillStyle='#444';mCtx.font='10px system-ui';mCtx.textAlign='center';
+  mCtx.fillText('↑ Торкніться тут щоб повернутись до меню',W/2,H*.26);mCtx.textAlign='left';
+  var gx=cx*W,gy=cy*H;
+  for(var ri=0;ri<KROWS.length;ri++){
+    var row=KROWS[ri];
+    for(var ki=0;ki<row.length;ki++){
+      var p=getKP(ri,ki,row,kl),hov=gx>=p.x&&gx<=p.x+p.w&&gy>=p.y&&gy<=p.y+kl.kH,key=row[ki];
+      if(checkDwell('k'+ri+ki,hov))doKey(key);
+      var dp=dwellKey==='k'+ri+ki?dwellVal:0;
+      mCtx.fillStyle=hov?'rgba(59,130,246,.3)':'rgba(255,255,255,.07)';rr(p.x,p.y,p.w,kl.kH,6);mCtx.fill();
+      mCtx.strokeStyle=hov?'#3b82f6':'#ffffff14';mCtx.lineWidth=hov?1.5:.5;rr(p.x,p.y,p.w,kl.kH,6);mCtx.stroke();
+      if(dp>0){mCtx.strokeStyle='#60a5fa';mCtx.lineWidth=2;mCtx.beginPath();mCtx.arc(p.x+p.w/2,p.y+kl.kH/2,kl.kH*.38,-Math.PI/2,-Math.PI/2+dp*Math.PI*2);mCtx.stroke();}
+      mCtx.fillStyle=hov?'#93c5fd':'#dde';mCtx.font=(ri===4?'11':'12')+'px system-ui';mCtx.textAlign='center';
+      mCtx.fillText(key,p.x+p.w/2,p.y+kl.kH*.68);mCtx.textAlign='left';
     }
   }
-  return false;
 }
 
-function resetDwell() {
-  S.dwellItem = null;
-  S.dwellStart = null;
-  S.dwellProgress = 0;
-}
-
-// ─── NOTIFICATIONS ───────────────────────────────────────
-function notify(msg) {
-  S.notification = msg;
-  S.notifTimer = 120;
-}
-
-// ─── OPEN EXTERNAL ───────────────────────────────────────
-function openURL(url) {
-  const panel = document.getElementById('vr-panel');
-  const iframe = document.getElementById('panel-iframe');
-  iframe.src = url;
-  panel.style.display = 'block';
-  if (screen.orientation && screen.orientation.lock) {
-    screen.orientation.lock('landscape').catch(()=>{});
-  }
-}
-
-function closePanel() {
-  document.getElementById('vr-panel').style.display = 'none';
-  document.getElementById('panel-iframe').src = '';
-}
-
-// ─── MAIN RENDER LOOP ────────────────────────────────────
-function loop() {
-  S.frame++;
-  processHand();
-
-  // Gesture: fist = click trigger
-  if (S.gesture === 'fist') {
-    S.fistFrames++;
-  } else {
-    if (S.fistFrames > 4 && S.fistFrames < 25) {
-      handleFistClick();
-    }
-    S.fistFrames = 0;
-  }
-
-  if (S.notifTimer > 0) S.notifTimer--;
-
-  drawEye(ctxL, hCtxL, 'l');
-  drawEye(ctxR, hCtxR, 'r');
-  updateGazeDots();
-
-  requestAnimationFrame(loop);
-}
-
-function handleFistClick() {
-  if (S.currentView === 'menu') {
-    MENU[S.menuIndex].action();
-    notify('Вибрано: ' + MENU[S.menuIndex].label);
-  } else if (S.currentView === 'browser' && S.showKeyboard) {
-    // handled in dwell
-  }
-}
-
-// ─── DRAW EYE ────────────────────────────────────────────
-function drawEye(ctx, hCtx, side) {
-  const W = ctx.canvas.width, H = ctx.canvas.height;
-
-  // Background gradient
-  ctx.fillStyle = '#0a0a18';
-  ctx.fillRect(0, 0, W, H);
-
-  // Stars
-  ctx.fillStyle = '#ffffff18';
-  for (let i=0;i<60;i++) {
-    const sx = ((i*137+side.charCodeAt(0)*17)%1000)/1000;
-    const sy = ((i*251+side.charCodeAt(0)*31)%1000)/1000;
-    const r = i%3===0?1.2:0.6;
-    ctx.beginPath();
-    ctx.arc(sx*W, sy*H, r, 0, Math.PI*2);
-    ctx.fill();
-  }
-
-  // Grid floor
-  ctx.strokeStyle = '#3b82f611';
-  ctx.lineWidth = 1;
-  for (let i=0;i<8;i++) {
-    const y = H*0.6 + i*(H*0.06);
-    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
-  }
-  for (let i=-5;i<=5;i++) {
-    const x = W/2 + i*W*0.12;
-    ctx.beginPath(); ctx.moveTo(x,H*0.6); ctx.lineTo(W/2+i*W*1.5,H*1.2); ctx.stroke();
-  }
-
-  // Horizon line
-  ctx.strokeStyle = '#3b82f633';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0,H*0.6); ctx.lineTo(W,H*0.6); ctx.stroke();
-
-  // Draw current view
-  if (S.currentView === 'menu') drawMenu(ctx, W, H);
-  else if (S.currentView === 'browser') drawBrowser(ctx, W, H);
-
-  // Notification
-  if (S.notifTimer > 0) {
-    const alpha = Math.min(S.notifTimer/20, 1);
-    ctx.fillStyle = `rgba(0,0,0,${alpha*0.8})`;
-    ctx.fillRect(W/2-120, H*0.08, 240, 34);
-    ctx.fillStyle = `rgba(96,165,250,${alpha})`;
-    ctx.font = '13px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText(S.notification, W/2, H*0.08+22);
-    ctx.textAlign = 'left';
-  }
-
-  // Vignette
-  const vg = ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.8);
-  vg.addColorStop(0,'transparent');
-  vg.addColorStop(1,'rgba(0,0,0,0.55)');
-  ctx.fillStyle = vg;
-  ctx.fillRect(0,0,W,H);
-
-  // Hand skeleton overlay
-  drawHandSkeleton(hCtx, W, H);
-}
-
-// ─── MENU ────────────────────────────────────────────────
-function drawMenu(ctx, W, H) {
-  const cx = W/2, cy = H/2 - 20;
-  const cols = 3, rows = 2;
-  const itemW = 100, itemH = 78, gap = 14;
-  const totalW = cols*itemW + (cols-1)*gap;
-  const totalH = rows*itemH + (rows-1)*gap;
-  const startX = cx - totalW/2;
-  const startY = cy - totalH/2;
-
-  // Panel bg
-  ctx.fillStyle = 'rgba(10,10,30,0.85)';
-  roundRect(ctx, startX-16, startY-44, totalW+32, totalH+80, 16);
-  ctx.fill();
-  ctx.strokeStyle = '#3b82f644';
-  ctx.lineWidth = 1;
-  roundRect(ctx, startX-16, startY-44, totalW+32, totalH+80, 16);
-  ctx.stroke();
-
-  ctx.fillStyle = '#c7d2fe';
-  ctx.font = '500 14px system-ui';
-  ctx.textAlign = 'center';
-  ctx.fillText('VR Меню', cx, startY-20);
-  ctx.textAlign = 'left';
-
-  const gx = S.gazeX * W, gy = S.gazeY * H;
-
-  MENU.forEach((item, idx) => {
-    const col = idx % cols, row = Math.floor(idx/cols);
-    const x = startX + col*(itemW+gap);
-    const y = startY + row*(itemH+gap);
-
-    // Check gaze hit
-    const hovered = gx>=x && gx<=x+itemW && gy>=y && gy<=y+itemH;
-
-    if (hovered) {
-      S.menuIndex = idx;
-      const clicked = updateDwell('menu-'+idx);
-      if (clicked) { MENU[idx].action(); notify('✓ '+MENU[idx].label); }
-    }
-
-    const isActive = S.menuIndex === idx;
-    const isHovered = hovered;
-
-    // Item bg
-    ctx.fillStyle = isHovered ? 'rgba(59,130,246,0.25)' : isActive ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)';
-    roundRect(ctx, x, y, itemW, itemH, 10);
-    ctx.fill();
-    ctx.strokeStyle = isHovered ? '#3b82f6' : '#ffffff22';
-    ctx.lineWidth = isHovered ? 1.5 : 0.5;
-    roundRect(ctx, x, y, itemW, itemH, 10);
-    ctx.stroke();
-
-    // Dwell arc
-    if (isHovered && S.dwellProgress > 0) {
-      const r = 24;
-      ctx.strokeStyle = '#60a5fa';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(x+itemW/2, y+itemH/2, r, -Math.PI/2, -Math.PI/2 + S.dwellProgress*Math.PI*2);
-      ctx.stroke();
-    }
-
-    // Icon & label
-    ctx.fillStyle = isHovered ? '#93c5fd' : '#e0e0ff';
-    ctx.font = '22px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText(item.icon, x+itemW/2, y+itemH/2+4);
-    ctx.font = isHovered ? '500 11px system-ui' : '11px system-ui';
-    ctx.fillStyle = isHovered ? '#bfdbfe' : '#8888aa';
-    ctx.fillText(item.label, x+itemW/2, y+itemH-12);
-    ctx.textAlign = 'left';
+var FCOLS=['#ef4444','#f97316','#eab308','#22c55e','#3b82f6'];
+function drawHand(){
+  hCtx.clearRect(0,0,W,H);if(!handBox)return;
+  var b=handBox,bx=b.cx*W,by=b.cy*H,bw=b.w*W*.5,bh=b.h*H*.5;
+  var wrist={x:bx,y:by+bh*.65};
+  var isOpen=gesture==='open',isFist=gesture==='fist';
+  var pb=[{x:bx-bw*.55,y:by+bh*.18},{x:bx-bw*.2,y:by},{x:bx+bw*.1,y:by-bh*.05},{x:bx+bw*.4,y:by+bh*.05},{x:bx+bw*.62,y:by+bh*.32}];
+  var t=frame*.035;
+  var tips=pb.map(function(p,i){var sp=isOpen?1:isFist?.15:.55,dy=isFist?bh*.08:-bh*(.52+Math.sin(t+i*.4)*.04);return{x:p.x+(p.x-bx)*.35*sp,y:p.y+dy*sp};});
+  pb.forEach(function(p,i){
+    var tip=tips[i],mid={x:(p.x+tip.x)/2,y:(p.y+tip.y)/2};
+    hCtx.strokeStyle=FCOLS[i];hCtx.lineWidth=2.5;hCtx.lineCap='round';hCtx.lineJoin='round';
+    hCtx.beginPath();hCtx.moveTo(wrist.x,wrist.y);hCtx.lineTo(p.x,p.y);hCtx.lineTo(mid.x,mid.y);hCtx.lineTo(tip.x,tip.y);hCtx.stroke();
+    [[wrist.x,wrist.y],[p.x,p.y],[mid.x,mid.y],[tip.x,tip.y]].forEach(function(j,ji){hCtx.fillStyle=ji===3?FCOLS[i]:'#fff';hCtx.beginPath();hCtx.arc(j[0],j[1],ji===3?4:3,0,Math.PI*2);hCtx.fill();});
   });
-
-  if (!MENU.some((_,i)=>{
-    const col=i%cols,row=Math.floor(i/cols);
-    const x=startX+col*(itemW+gap),y=startY+row*(itemH+gap);
-    const gx=S.gazeX*W,gy=S.gazeY*H;
-    return gx>=x&&gx<=x+itemW&&gy>=y&&gy<=y+itemH;
-  })) resetDwell();
-
-  // Hint
-  ctx.fillStyle = '#6666aa';
-  ctx.font = '10px system-ui';
-  ctx.textAlign = 'center';
-  ctx.fillText('Дивіться на кнопку — або ✊ кулак для вибору', cx, startY+totalH+26);
-  ctx.textAlign = 'left';
+  hCtx.strokeStyle='rgba(255,255,255,.2)';hCtx.lineWidth=1;for(var i=0;i<pb.length-1;i++){hCtx.beginPath();hCtx.moveTo(pb[i].x,pb[i].y);hCtx.lineTo(pb[i+1].x,pb[i+1].y);hCtx.stroke();}
+  if(!isFist){hCtx.strokeStyle='rgba(96,165,250,.5)';hCtx.lineWidth=1.5;hCtx.setLineDash([5,5]);hCtx.beginPath();hCtx.moveTo(tips[1].x,tips[1].y);hCtx.lineTo(cx*W,cy*H);hCtx.stroke();hCtx.setLineDash([]);}
+  hCtx.fillStyle=gesture==='fist'?'#ef4444':gesture==='open'?'#4ade80':'#facc15';
+  hCtx.font='11px system-ui';hCtx.fillText(gesture==='open'?'✋':gesture==='fist'?'✊':'🤏',b.x0*W,b.y0*H-8);
 }
 
-// ─── BROWSER / KEYBOARD ──────────────────────────────────
-function drawBrowser(ctx, W, H) {
-  const cx = W/2, cy = H/2;
-
-  if (S.showKeyboard) {
-    // URL bar
-    ctx.fillStyle = 'rgba(10,10,30,0.9)';
-    roundRect(ctx, cx-190, cy-180, 380, 44, 10);
-    ctx.fill();
-    ctx.strokeStyle = '#3b82f655';
-    ctx.lineWidth = 1;
-    roundRect(ctx, cx-190, cy-180, 380, 44, 10);
-    ctx.stroke();
-    ctx.fillStyle = '#60a5fa';
-    ctx.font = '13px system-ui';
-    ctx.textAlign = 'left';
-    const urlShow = S.urlInput.length > 32 ? '…'+S.urlInput.slice(-30) : S.urlInput;
-    ctx.fillText(urlShow + (S.frame%60<30?'|':''), cx-180, cy-152);
-
-    // Keyboard
-    const kStartY = cy - 128;
-    const gx = S.gazeX * W, gy = S.gazeY * H;
-    let hoveredKey = null;
-
-    KEYBOARD_ROWS.forEach((row, ri) => {
-      const keyW = ri < 4 ? 34 : 58;
-      const kgap = 4;
-      const rowW = row.length*(keyW+kgap)-kgap;
-      const kx0 = cx - rowW/2;
-      const ky0 = kStartY + ri*(38+4);
-
-      row.forEach((key, ki) => {
-        const kx = kx0 + ki*(keyW+kgap);
-        const ky = ky0;
-        const hov = gx>=kx&&gx<=kx+keyW&&gy>=ky&&gy<=ky+34;
-        if (hov) {
-          hoveredKey = {key, kx, ky, keyW};
-          const clicked = updateDwell('key-'+ri+'-'+ki);
-          if (clicked) handleKeyPress(key);
-        }
-        ctx.fillStyle = hov ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.08)';
-        roundRect(ctx, kx, ky, keyW, 34, 6);
-        ctx.fill();
-        ctx.strokeStyle = hov ? '#3b82f6' : '#ffffff11';
-        ctx.lineWidth = hov ? 1.5 : 0.5;
-        roundRect(ctx, kx, ky, keyW, 34, 6);
-        ctx.stroke();
-        ctx.fillStyle = hov ? '#93c5fd' : '#e0e0ff';
-        ctx.font = '12px system-ui';
-        ctx.textAlign = 'center';
-        ctx.fillText(key, kx+keyW/2, ky+22);
-        ctx.textAlign = 'left';
-
-        // Dwell progress arc on key
-        if (hov && S.dwellProgress > 0) {
-          ctx.strokeSty
+function rr(x,y,w,h,r){mCtx.beginPath();mCtx.moveTo(x+r,y);mCtx.lineTo(x+w-r,y);mCtx.quadraticCurveTo(x+w,y,x+w,y+r);mCtx.lineTo(x+w,y+h-r);mCtx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);mCtx.lineTo(x+r,y+h);mCtx.quadraticCurveTo(x,y+h,x,y+h-r);mCtx.lineTo(x,y+r);mCtx.quadraticCurveTo(x,y,x+r,y);mCtx.closePath();}
+function showNotif(msg){var el=document.getElementById('notif');el.textContent=msg;el.style.opacity='1';notifTimer=120;}
+</script>
+</body>
+</html>
